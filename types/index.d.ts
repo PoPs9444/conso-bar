@@ -36,7 +36,11 @@ export type Day = { date: string; usd: number }
 // Update from GitHub
 export type UpdateState = {
   latest?: string
-  status: 'idle' | 'running' | 'done' | 'error'
+  // checking: asking GitHub; current: no newer version; running: installing;
+  // done: installed, restart needed; error: the last check or install failed
+  status: 'idle' | 'checking' | 'current' | 'running' | 'done' | 'error'
+  // why the last check or install failed, shown under the panel
+  message?: string
 }
 
 // The panel's blocks, in the order the person chose
