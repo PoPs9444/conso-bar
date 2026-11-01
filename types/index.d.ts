@@ -47,6 +47,9 @@ export type UpdateState = {
 // The panel's blocks, in the order the person chose
 export type CardKey = 'limits' | 'context' | 'history' | 'agents'
 
+// The languages the panel speaks; English unless Claude Code is set to another
+export type Lang = 'en' | 'fr' | 'es' | 'de' | 'it' | 'pt'
+
 declare module 'claude-code' {
   interface PluginState {
     'conso-bar': {
@@ -58,6 +61,7 @@ declare module 'claude-code' {
       update: UpdateState
       order: CardKey[]
       isCustomizing: boolean
+      lang: Lang
     }
   }
 }

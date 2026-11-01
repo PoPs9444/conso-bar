@@ -1,17 +1,19 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { AgentRun, CardKey, Day, Limit, Snapshot, UpdateState } from '../types'
+import type { AgentRun, CardKey, Day, Lang, Limit, Snapshot, UpdateState } from '../types'
 
 import { agentsCard } from './agents'
 
-import { contextCard, heat, historyCard, limitCards, updateCard } from './dashboard'
+import { HEX, contextCard, footerLine, heat, historyCard, left, limitCards, updateCard } from './dashboard'
+import { STRINGS, toLang } from './i18n'
+import type { Strings } from './i18n'
 import { costOf } from './pricing'
 
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.21.2'
+export const VERSION = '0.22.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
@@ -24,6 +26,53 @@ const DEFAULT_ORDER: CardKey[] = ['limits', 'context', 'history', 'agents']
 const order = atom({ plugin: 'conso-bar', key: 'order' } as const, DEFAULT_ORDER)
 const isCustomizing = atom({ plugin: 'conso-bar', key: 'isCustomizing' } as const, false)
 const updateState = atom({ plugin: 'conso-bar', key: 'update' } as const, { status: 'idle' } as UpdateState)
+const lang = atom({ plugin: 'conso-bar', key: 'lang' } as const, 'en' as Lang)
+
+// The words in the language Claude Code is set to
+const words = async ($: EngineInterface): Promise<Strings> => STRINGS[await read($, lang)]
+
+// ---- Language: English unless Claude Code itself is set to another one
+
+// The Claude app's display language (Settings › Language), read from its
+// config file. Only that one key is extracted, by a system tool, so nothing
+// else in the file (the app's sign-in cache among others) ever reaches Conso
+const appLocale = async ($: EngineInterface): Promise<string | undefined> => {
+  const appData = await $.env.get('APPDATA')
+  if (appData) {
+    const r = await $.process.run(
+      ['powershell', '-NoProfile', '-Command', '(Get-Content -Raw -LiteralPath $env:APPDATA\\Claude\\config.json | ConvertFrom-Json).locale'],
+      { timeoutMs: 5000 },
+    )
+    return r.exitCode === 0 ? r.stdout.trim() : undefined
+  }
+  const home = await $.env.get('HOME')
+  if (!home) return undefined
+  const config = `${home}/Library/Application Support/Claude/config.json`
+  if (!(await $.fs.exists(config))) return undefined
+  const r = await $.process.run(['plutil', '-extract', 'locale', 'raw', '-o', '-', config], { timeoutMs: 5000 })
+  return r.exitCode === 0 ? r.stdout.trim() : undefined
+}
+
+// 1. Claude Code's own `language` setting, when the person set one: a language
+//    Conso does not speak then means English
+// 2. otherwise, the Claude app's display language
+// 3. otherwise, English
+export const detectLang = async ($: EngineInterface): Promise<Lang> => {
+  // The whole settings, then the key: the same answer wherever the read is served
+  let setting: unknown
+  try {
+    setting = ((await $.settings.read()) as { language?: unknown }).language
+  } catch {
+    setting = undefined
+  }
+  if (typeof setting === 'string' && setting.trim()) return toLang(setting) ?? 'en'
+  return toLang(await appLocale($).catch(() => undefined)) ?? 'en'
+}
+
+const syncLang = async ($: EngineInterface) => {
+  const found = await detectLang($)
+  if ((await read($, lang)) !== found) await update($, lang, () => found)
+}
 
 // Green to red as the percentage rises
 const levelColor = (p: number) => heat(p)
@@ -34,21 +83,22 @@ const bar = (p: number) => {
   return { on: '━'.repeat(n), off: '━'.repeat(SEGMENTS - n) }
 }
 
-const left = (resetsAt: string | undefined, now: number) => {
-  if (!resetsAt) return ''
-  const d = Math.max(0, (Date.parse(resetsAt) - now) / 1000)
-  if (d >= 86400) return `${Math.floor(d / 86400)}d ${Math.floor((d % 86400) / 3600)}h`
-  if (d >= 3600) return `${Math.floor(d / 3600)}h ${Math.floor((d % 3600) / 60)}m`
-  return `${Math.floor(d / 60)}m`
-}
-
 const num = (n: number, digits: number) => n.toFixed(digits)
 
 const tokens = (n: number) =>
   n >= 1_000_000 ? `${num(n / 1_000_000, n % 1_000_000 === 0 ? 0 : 1)}M` : `${Math.round(n / 1000)}k`
 
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+
+// Written only when something changed: every write redraws the panel
 const save = async ($: EngineInterface, s: Snapshot) => {
+  if (same(await read($, snapshot), s)) return
   await update($, snapshot, () => s)
+}
+
+const setHistory = async ($: EngineInterface, days: Day[]) => {
+  if (same(await read($, history), days)) return
+  await update($, history, () => days)
 }
 
 // ---- Memory across sessions ($.store): last limits reading and cost per day
@@ -66,11 +116,19 @@ const lastWeek = (days: Record<string, number>, now: number): Day[] =>
     return { date, usd: days[date] ?? 0 }
   })
 
+// What the last call stored: a measurement with nothing new writes nothing
+let remembered: { limits: string; usd?: number } = { limits: '' }
+
 const remember = async ($: EngineInterface, s: Snapshot) => {
   const now = await $.clock.now()
-  if (s.limits.length > 0) await $.store.set('lastLimits', { limits: s.limits, at: s.limitsAt ?? now })
+  const limitsKey = JSON.stringify(s.limits)
+  if (s.limits.length > 0 && limitsKey !== remembered.limits) {
+    await $.store.set('lastLimits', { limits: s.limits, at: s.limitsAt ?? now })
+    remembered = { ...remembered, limits: limitsKey }
+  }
 
-  if (s.usd === undefined) return
+  if (s.usd === undefined || s.usd === remembered.usd) return
+  remembered = { ...remembered, usd: s.usd }
   const sid = await $.session.id()
   const seen = ((await $.store.get('costSeen')) ?? {}) as Record<string, number>
   const days = ((await $.store.get('costDays')) ?? {}) as Record<string, number>
@@ -84,7 +142,7 @@ const remember = async ($: EngineInterface, s: Snapshot) => {
     await $.store.set('costDays', keepDays)
     await $.store.set('costSeen', keepSeen)
   }
-  await update($, history, () => lastWeek(days, now))
+  await setHistory($, lastWeek(days, now))
 }
 
 let ticker: { cancel: () => void } | undefined
@@ -94,8 +152,8 @@ const patch = async ($: EngineInterface, id: string, fn: (a: AgentRun) => AgentR
 }
 
 // A one-second clock while an agent runs, for the displayed duration
-const syncTicker = async ($: EngineInterface) => {
-  const live = (await read($, agents)).some(a => a.status === 'running')
+const syncTicker = async ($: EngineInterface, list?: readonly AgentRun[]) => {
+  const live = (list ?? (await read($, agents))).some(a => a.status === 'running')
   if (live && !ticker) {
     ticker = $.clock.every(1000, () => void update($, tick, n => n + 1))
   } else if (!live && ticker) {
@@ -119,14 +177,15 @@ const syncFromStore = async ($: EngineInterface) => {
   if (s) {
     const newer = last && last.at > (s.limitsAt ?? 0)
     const limits = fresh(newer ? last.limits : s.limits, now)
-    await update($, snapshot, cur => (cur ? { ...cur, limits, limitsAt: newer ? last.at : cur.limitsAt } : cur))
+    await save($, { ...s, limits, limitsAt: newer ? last.at : s.limitsAt })
   }
   const days = ((await $.store.get('costDays')) ?? {}) as Record<string, number>
-  await update($, history, () => lastWeek(days, now))
+  await setHistory($, lastWeek(days, now))
 }
 
 let poller: { cancel: () => void } | undefined
 let updatePoller: { cancel: () => void } | undefined
+let langPoller: { cancel: () => void } | undefined
 
 // ---- Updates from GitHub
 
@@ -143,12 +202,13 @@ const isNewer = (a: string, b: string) => {
 // Reads the version published on GitHub. The automatic check stays quiet on
 // failure; the manual one (Check for updates) says what happened
 const checkUpdate = async ($: EngineInterface, isManual = false) => {
+  const t = await words($)
   if (isManual) await update($, updateState, (u): UpdateState => ({ ...u, status: 'checking', message: undefined }))
   try {
     const r = await $.http.fetch(`https://raw.githubusercontent.com/${REPO}/main/.claude-plugin/plugin.json`)
-    if (!r.ok) throw new Error(`GitHub answered ${r.status}`)
+    if (!r.ok) throw new Error(t.githubAnswered(r.status))
     const latest = String((JSON.parse(r.text) as { version?: unknown }).version ?? '')
-    if (!/^\d+(\.\d+)*$/.test(latest)) throw new Error('no version found on GitHub')
+    if (!/^\d+(\.\d+)*$/.test(latest)) throw new Error(t.noVersion)
     await update($, updateState, (u): UpdateState =>
       u.status === 'running' || u.status === 'done'
         ? u
@@ -164,6 +224,7 @@ const checkUpdate = async ($: EngineInterface, isManual = false) => {
 
 // Claude Code's two official commands: refresh the marketplace, then the plugin
 const runUpdate = async ($: EngineInterface) => {
+  const t = await words($)
   const cur = await read($, updateState)
   if (cur.status === 'running') return
   await update($, updateState, (u): UpdateState => ({ ...u, status: 'running' }))
@@ -180,30 +241,23 @@ const runUpdate = async ($: EngineInterface) => {
     // this session, no restart. Where it cannot run, a restart applies it
     try {
       await $.command.run({ command: 'reload-plugins' })
-      $.ui.toast('Conso updated and reloaded')
+      $.ui.toast(t.updatedReloaded)
     } catch {
       await update($, updateState, (u): UpdateState => ({ ...u, message: 'restart' }))
-      $.ui.toast('Conso updated: restart Claude Code to apply it')
+      $.ui.toast(t.updatedRestart)
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     await update($, updateState, (u): UpdateState => ({ ...u, status: 'error', message }))
-    $.ui.toast(`Update failed: ${message}`)
+    $.ui.toast(t.updateFailed(message))
   }
 }
 
 // ---- Card order, kept across sessions
 
-const CARD_NAMES: Record<CardKey, string> = {
-  limits: 'Limits',
-  context: 'Context',
-  history: 'History',
-  agents: 'Agents',
-}
-
 // A stored order missing a card (an older version) gets it back at the end
 const normalizeOrder = (stored: unknown): CardKey[] => {
-  const known = Array.isArray(stored) ? stored.filter((k): k is CardKey => k in CARD_NAMES) : []
+  const known = Array.isArray(stored) ? stored.filter((k): k is CardKey => DEFAULT_ORDER.includes(k as CardKey)) : []
   const unique = [...new Set(known)]
   return [...unique, ...DEFAULT_ORDER.filter(k => !unique.includes(k))]
 }
@@ -221,22 +275,23 @@ const moveCard = async ($: EngineInterface, key: CardKey, by: -1 | 1) => {
 }
 
 // Update banner: only when GitHub has a newer version
-const updateBanner = (u: UpdateState) =>
+const updateBanner = (u: UpdateState, t: Strings) =>
   u.latest && isNewer(u.latest, VERSION) && (u.status === 'idle' || u.status === 'running' || u.status === 'done' || u.status === 'error')
-    ? updateCard(u.latest, u.status, u.message === 'restart')
+    ? updateCard(u.latest, u.status, u.message === 'restart', t)
     : null
 
-// What the footer says about updates, after the version number
-const updateLine = (u: UpdateState) =>
+// What the footer says about updates after the version number, and the color
+// of its dot: green up to date, blue a new version, red a failed check
+const updateLine = (u: UpdateState, t: Strings): { text: string; color: string; reason?: string } =>
   u.status === 'checking'
-    ? 'Checking for updates…'
+    ? { text: t.checkingUpdates, color: '#6e6e74' }
     : u.status === 'current'
-      ? 'Up to date'
+      ? { text: t.upToDate, color: HEX.green! }
       : u.status === 'error' && u.message
-        ? `Update check failed: ${u.message}`
+        ? { text: t.checkFailed, color: HEX.red!, reason: u.message }
         : u.latest && isNewer(u.latest, VERSION)
-          ? `v${u.latest} available`
-          : ''
+          ? { text: t.available(u.latest), color: HEX.blue! }
+          : { text: '', color: '#6e6e74' }
 
 const toSnapshot = (u: {
   cost?: { usd: number }
@@ -252,7 +307,10 @@ const toSnapshot = (u: {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
-    await $.command.register({ name: 'conso', description: 'Show the Conso panel' })
+    // A compaction cut short (a reload, a crash) must not leave the button busy
+    await update($, isCompacting, () => false)
+    await syncLang($).catch(() => undefined)
+    await $.command.register({ name: 'conso', description: (await words($)).command })
     if (e.surface !== 'terminal') void $.ui.open({ id: PANE, title: 'Conso' })
     const now = await $.clock.now()
     let first = toSnapshot(await $.session.usage())
@@ -275,44 +333,62 @@ export const register: Register = on => {
     $.clock.after(3000, () => void checkUpdate($).catch(() => undefined))
     updatePoller?.cancel()
     updatePoller = $.clock.every(6 * 3_600_000, () => void checkUpdate($).catch(() => undefined))
+    // The language again every 10 minutes, should it change in the meantime
+    langPoller?.cancel()
+    langPoller = $.clock.every(600_000, () => void syncLang($).catch(() => undefined))
     return r
   })
 
   on('command.run', { command: 'conso' }, async $ => {
+    await syncLang($).catch(() => undefined)
     await $.ui.open({ id: PANE, title: 'Conso' })
-    return { text: 'Conso panel opened.' }
+    return { text: (await words($)).opened }
+  })
+
+  // Any compaction of the conversation (the button, a typed /compact, the
+  // automatic one): the button is free again and the context shows its new size
+  on('session.compact', async ($, e, next) => {
+    const r = await next(e)
+    if (e.agentId === undefined) {
+      await update($, isCompacting, () => false)
+      const s = await read($, snapshot)
+      // A compaction a hook skipped has no size afterwards
+      const after = 'tokensAfter' in r ? r.tokensAfter : undefined
+      if (s && after !== undefined) await save($, { ...s, tokens: after })
+    }
+    return r
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
+    const t = await words($)
     const s = await read($, snapshot)
     if (s === null || !('Svg' in els)) {
-      return <els.Text dimColor>Waiting for the first reply…</els.Text>
+      return <els.Text dimColor>{t.waiting}</els.Text>
     }
 
-    const limits = limitCards(s, await $.clock.now())
-    const upd = await read($, updateState)
-    const banner = updateBanner(upd)
-    const hist = historyCard(await read($, history))
-    const ctx = contextCard(s)
-    const busy = await read($, isCompacting)
     await read($, tick)
-    const ag = agentsCard(await read($, agents), await $.clock.now())
+    const now = await $.clock.now()
+    const limits = limitCards(s, now, t)
+    const upd = await read($, updateState)
+    const banner = updateBanner(upd, t)
+    const hist = historyCard(await read($, history), t)
+    const ctx = contextCard(s, t)
+    const busy = await read($, isCompacting)
+    const ag = agentsCard(await read($, agents), now, t)
 
+    // Exactly what typing /compact does: it shows in the conversation and runs
+    // as soon as Claude is idle. Started on a timer so the press returns at
+    // once: a compaction outlasts the time a press may take
     const compact = async () => {
       if (await read($, isCompacting)) return
       await update($, isCompacting, () => true)
-      try {
-        // Exactly what typing /compact does: it shows in the conversation and
-        // runs as soon as Claude is idle
-        await $.command.run({ command: 'compact' })
-        const after = toSnapshot(await $.session.usage())
-        await save($, after.limits.length > 0 ? { ...after, limitsAt: await $.clock.now() } : { ...after, limits: s.limits, limitsAt: s.limitsAt })
-      } catch (err) {
-        $.ui.toast(`Compact failed: ${err instanceof Error ? err.message : String(err)}`)
-      } finally {
-        await update($, isCompacting, () => false)
-      }
+      $.clock.after(0, () => {
+        void $.command
+          .run({ command: 'compact' })
+          .catch((err: unknown) => $.ui.toast(t.compactFailed(err instanceof Error ? err.message : String(err))))
+          .finally(() => update($, isCompacting, () => false))
+      })
     }
 
     // Clear frees the room taken by finished agents
@@ -343,10 +419,8 @@ export const register: Register = on => {
       context: ctx
         ? frame('ctx', [
             <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
-              <els.Svg source={ctx.title} alt="Context" width={80} height={14} />
-              <els.Button key="compact" plain dimColor onPress={compact}>
-                {busy ? 'Compact…' : 'Compact'}
-              </els.Button>
+              <els.Svg source={ctx.title} alt={t.context} width={ctx.titleW} height={14} />
+              <els.Button key="compact" label={busy ? t.compacting : t.compact} plain dimColor onPress={compact} />
             </els.Box>,
             <els.Svg key="body" source={ctx.svg} alt={ctx.alt} height={ctx.h} />,
           ])
@@ -354,14 +428,10 @@ export const register: Register = on => {
       history: hist ? frame('hist', <els.Svg source={hist.svg} alt={hist.alt} height={hist.h} />) : null,
       agents: frame('agents', [
         <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
-          <els.Svg source={ag.head} alt="Agents" width={150} height={14} />
-          {ag.finished > 0 ? (
-            <els.Button key="clear" plain dimColor onPress={clearFinished}>
-              Clear
-            </els.Button>
-          ) : null}
+          <els.Svg source={ag.head} alt={t.agents} width={ag.headW} height={14} />
+          {ag.finished > 0 ? <els.Button key="clear" label={t.clear} plain dimColor onPress={clearFinished} /> : null}
         </els.Box>,
-        ag.rows.length === 0 ? <els.Svg key="empty" source={ag.empty} alt="No agents" height={ag.emptyH} /> : null,
+        ag.rows.length === 0 ? <els.Svg key="empty" source={ag.empty} alt={t.noAgents} height={ag.emptyH} /> : null,
         ...ag.rows.map(r => (
           <els.Box key={r.id} flexDirection="column">
             <els.Svg source={r.top.svg} alt={r.alt} height={r.top.h} />
@@ -369,11 +439,7 @@ export const register: Register = on => {
               <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
                 <els.Svg source={r.mid.svg} alt={r.mid.alt} height={r.mid.h} />
               </els.Box>
-              {r.canStop ? (
-                <els.Button key={`stop-${r.id}`} plain dimColor onPress={stop(r.id)}>
-                  Stop
-                </els.Button>
-              ) : null}
+              {r.canStop ? <els.Button key={`stop-${r.id}`} label={t.stop} plain dimColor onPress={stop(r.id)} /> : null}
             </els.Box>
             <els.Svg source={r.bottom.svg} alt={r.bottom.alt} height={r.bottom.h} />
           </els.Box>
@@ -390,7 +456,7 @@ export const register: Register = on => {
         <els.Box key={`block-${key}`} flexDirection="column" gap={1}>
           <els.Box flexDirection="row" alignItems="center" gap={1}>
             <els.Box flexGrow={1}>
-              <els.Text dimColor>{CARD_NAMES[key]}</els.Text>
+              <els.Text dimColor>{t.cards[key]}</els.Text>
             </els.Box>
             {i > 0 ? (
               <els.Button key={`up-${key}`} plain dimColor onPress={() => moveCard($, key, -1)}>
@@ -403,37 +469,37 @@ export const register: Register = on => {
               </els.Button>
             ) : null}
           </els.Box>
-          {blocks[key] ?? <els.Text dimColor>Nothing to show yet</els.Text>}
+          {blocks[key] ?? <els.Text dimColor>{t.nothingYet}</els.Text>}
         </els.Box>
       )
     })
 
     const toggle = (
       <els.Box key="customize-row" flexDirection="row" justifyContent="flex-end">
-        <els.Button key="customize" plain dimColor onPress={() => update($, isCustomizing, v => !v)}>
-          {customizing ? 'Done' : 'Customize'}
-        </els.Button>
+        <els.Button key="customize" label={customizing ? t.done : t.customize} plain dimColor onPress={() => update($, isCustomizing, v => !v)} />
       </els.Box>
     )
 
-    // Footer: the installed version, what the last update check found, and a
-    // permanent Check for updates
-    const line = updateLine(upd)
+    // Footer, centered under the cards: the two actions, then the installed
+    // version with what the last update check found. Centered, a button's own
+    // padding lines up with the text, and a narrow panel wraps it cleanly
+    const line = updateLine(upd, t)
+    const foot = footerLine(VERSION, line.text, line.color, line.reason)
     const footer = (
       <els.Box key="footer" flexDirection="column">
-        <els.Box flexDirection="row" flexWrap="wrap" justifyContent="flex-end" columnGap={2}>
-          <els.Button key="check-updates" plain dimColor onPress={() => checkUpdate($, true)}>
-            {upd.status === 'checking' ? 'Checking…' : 'Check for updates'}
-          </els.Button>
+        <els.Box flexDirection="row" flexWrap="wrap" justifyContent="center" columnGap={1}>
+          <els.Button
+            key="check-updates"
+            label={upd.status === 'checking' ? t.checking : t.checkUpdates}
+            plain
+            dimColor
+            onPress={() => checkUpdate($, true)}
+          />
           {customizing ? null : (
-            <els.Button key="customize" plain dimColor onPress={() => update($, isCustomizing, v => !v)}>
-              Customize
-            </els.Button>
+            <els.Button key="customize" label={t.customize} plain dimColor onPress={() => update($, isCustomizing, v => !v)} />
           )}
         </els.Box>
-        {/* The version and the last check's result on a line of their own, so
-            nothing overlaps however narrow the panel gets */}
-        <els.Text dimColor>{line ? `v${VERSION} · ${line}` : `v${VERSION}`}</els.Text>
+        <els.Svg key="version" source={foot.svg} alt={foot.alt} height={foot.h} />
       </els.Box>
     )
 
@@ -449,9 +515,7 @@ export const register: Register = on => {
                   <els.Svg source={banner.svg} alt={banner.alt} height={banner.h} />
                 </els.Box>
                 {upd.status === 'idle' || upd.status === 'error' ? (
-                  <els.Button key="update" plain dimColor onPress={() => runUpdate($)}>
-                    Update
-                  </els.Button>
+                  <els.Button key="update" label={t.update} plain dimColor onPress={() => runUpdate($)} />
                 ) : null}
               </els.Box>
             ))
@@ -484,13 +548,13 @@ export const register: Register = on => {
         steps: 0,
         outputTokens: 0,
       }
-      await update($, agents, list => {
-        const seen = list.find(a => a.id === run.id)
+      const list = await update($, agents, cur => {
+        const seen = cur.find(a => a.id === run.id)
         // Already seen through its first step: just give it its name
-        if (seen) return list.map(a => (a === seen ? { ...a, description: run.description, type: run.type, prompt: run.prompt } : a))
-        return [...list, run].slice(-50)
+        if (seen) return cur.map(a => (a === seen ? { ...a, description: run.description, type: run.type, prompt: run.prompt } : a))
+        return [...cur, run].slice(-50)
       })
-      await syncTicker($)
+      await syncTicker($, list)
     }
     return r
   })
@@ -510,7 +574,9 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('turn.step', async function* ($, e, next) {
+  // Agents' steps only (the matcher wants an agentId): the main conversation's
+  // replies stream straight through, without ever passing through Conso
+  on('turn.step', { agentId: /./ }, async function* ($, e, next) {
     const id = e.agentId
     if (id === undefined) return yield* next(e)
     const now = await $.clock.now()
@@ -521,13 +587,16 @@ export const register: Register = on => {
     const known = list0.some(a => a.id === id)
     const info = known ? undefined : (await $.agent.list().catch(() => [])).find(a => a.id === id)
     if (!known && !info) return yield* next(e)
-    await update($, agents, list => {
-      if (list.some(a => a.id === id)) return list
+    // One write per step: linked or added, then counted
+    const count = (a: AgentRun): AgentRun =>
+      a.isStopping ? a : { ...a, model: e.model, effort: e.effort ?? a.effort, steps: a.steps + 1 }
+    const list = await update($, agents, cur => {
+      if (cur.some(a => a.id === id)) return cur.map(a => (a.id === id ? count(a) : a))
       // Known to the engine but not linked by its prompt: take a pending launch
       // of the same model
-      const pending = list.filter(a => !a.isLinked && a.status === 'running')
+      const pending = cur.filter(a => !a.isLinked && a.status === 'running')
       const spawn = pending.find(a => a.model === e.model) ?? pending[0]
-      if (spawn) return list.map(a => (a === spawn ? { ...a, id, isLinked: true } : a))
+      if (spawn) return cur.map(a => (a === spawn ? count({ ...a, id, isLinked: true }) : a))
       const run: AgentRun = {
         id,
         isLinked: true,
@@ -537,14 +606,14 @@ export const register: Register = on => {
         model: e.model,
         status: 'running',
         startedAt: now,
-        steps: 0,
+        steps: 1,
         outputTokens: 0,
       }
-      return [...list, run].slice(-50)
+      return [...cur, run].slice(-50)
     })
-    await syncTicker($)
+    await syncTicker($, list)
     // Stop requested: no new request, the agent hands back cleanly
-    if ((await read($, agents)).find(a => a.id === id)?.isStopping) {
+    if (list.find(a => a.id === id)?.isStopping) {
       return {
         turnId: e.turnId,
         index: e.index,
@@ -554,7 +623,6 @@ export const register: Register = on => {
         usage: null,
       }
     }
-    await patch($, id, a => ({ ...a, model: e.model, effort: e.effort ?? a.effort, steps: a.steps + 1 }))
     const r = yield* next(e)
     const u = r.usage
     if (u) {
@@ -567,10 +635,12 @@ export const register: Register = on => {
   on('tool.call', async ($, e, next) => {
     if (e.agentId !== undefined) {
       const id = e.agentId
-      if ((await read($, agents)).find(a => a.id === id)?.isStopping) {
+      const run = (await read($, agents)).find(a => a.id === id)
+      if (run?.isStopping) {
         return { deny: 'Stopped by the user from the Conso panel: finish now, without any further action.' }
       }
-      await patch($, id, a => ({ ...a, lastTool: e.tool }))
+      // Written only when the tool changes: a run of Reads redraws nothing
+      if (run && run.lastTool !== e.tool) await patch($, id, a => ({ ...a, lastTool: e.tool }))
     }
     return next(e)
   })
@@ -606,10 +676,13 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+  // The terminal's bar only: the desktop app has the panel, and its band is
+  // never asked for
+  on('ui.render', { component: 'AbovePrompt', surface: 'terminal' }, async ($, e, next) => {
     const s = await read($, snapshot)
     if (e.props.hasSurvey || s === null || e.surface !== 'terminal') return next(e)
 
+    const t = await words($)
     const now = await $.clock.now()
     const { Box, Text } = $.ui.resolve(e)
 
@@ -640,7 +713,7 @@ export const register: Register = on => {
       if (!l) return null
       const p = l.percentUsed
       const color = levelColor(p)
-      const reset = left(l.resetsAt, now)
+      const reset = left(l.resetsAt, now, t.units)
       return chip(key, [
         label(name),
         meter(p, color),
@@ -660,17 +733,17 @@ export const register: Register = on => {
     const parts = [
       s.usd !== undefined
         ? chip('cost', [
-            label('Session'),
+            label(t.band.session),
             <Text key="usd" bold>
               ${s.usd.toFixed(2)}
             </Text>,
           ])
         : null,
-      limit('h5', '5h', s.limits.find(l => l.kind === 'five_hour')),
-      limit('w7', 'Week', s.limits.find(l => l.kind === 'seven_day')),
+      limit('h5', t.band.h5, s.limits.find(l => l.kind === 'five_hour')),
+      limit('w7', t.band.week, s.limits.find(l => l.kind === 'seven_day')),
       s.tokens !== undefined && ctxPct !== undefined
         ? chip('ctx', [
-            label('Context'),
+            label(t.band.context),
             meter(ctxPct, levelColor(ctxPct)),
             <Text key="tok">
               <Text bold color="suggestion">

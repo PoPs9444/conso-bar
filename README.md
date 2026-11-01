@@ -24,6 +24,7 @@ Limits, context, costs and live agents, in a panel right next to your conversati
 - [Installation](#installation)
 - [Usage](#usage)
 - [Customize the layout](#customize-the-layout)
+- [Languages](#languages)
 - [Updates](#updates)
 - [How the numbers are computed](#how-the-numbers-are-computed)
 - [Privacy](#privacy)
@@ -83,13 +84,21 @@ Then restart Claude Code. The **Conso** panel opens on the right at the start of
 
 Click **Customize** at the bottom of the panel: each card shows **↑** and **↓** to move it up or down. Click **Done** at the top of the panel when you are finished. Your order is remembered in every conversation.
 
+## Languages
+
+Conso speaks **English**, **French**, **Spanish**, **German**, **Italian** and **Portuguese**, and follows Claude Code on its own, with nothing to set:
+
+1. your Claude Code `language` setting, if you set one;
+2. otherwise, the language of the Claude app (Settings › Language);
+3. otherwise, or for a language Conso does not speak yet, English.
+
 ## Updates
 
 <img src="docs/update.svg" alt="The &quot;New version&quot; banner with its Update button" width="372">
 
 Conso checks this repository for a newer version a few seconds after a session starts, then every 6 hours. When there is one, a banner appears at the top of the panel. **Update** runs Claude Code's official commands to download the new version, then reloads the plugins: the new version is live right away, no restart needed.
 
-The bottom of the panel shows your installed version and a permanent **Check for updates** button, which tells you right away whether you are up to date, or why the check failed.
+The bottom of the panel shows your installed version with a status dot (green: up to date, blue: a new version, red: the check failed) and a permanent **Check for updates** button, which tells you right away whether you are up to date, or why the check failed.
 
 To update by hand:
 
@@ -112,6 +121,8 @@ claude plugin update conso-bar@conso-bar
 
 Conso sends nothing anywhere. Everything is computed and stored on your machine. Its only network request reads the version number published in this repository, to offer updates.
 
+To pick its language, Conso reads Claude Code's `language` setting and, in the desktop app, the single `locale` key of the Claude app's settings file (extracted with the system's own `plutil` on macOS or PowerShell on Windows, so nothing else in that file ever reaches Conso).
+
 ## FAQ
 
 **Why do the limits have no decimals?**
@@ -119,6 +130,9 @@ Claude Code reports them rounded to whole percentages. Showing a decimal would m
 
 **The percentage does not move when I am not typing.**
 Limits are only known when the model replies. Without a message, no session receives a new reading.
+
+**Does Conso slow Claude Code down?**
+No. The conversation's replies never pass through Conso: it only follows agents' steps. It writes only when a figure changes, and when nothing moved it hands the app the very same drawing, so nothing is repainted.
 
 **The panel does not appear.**
 Check that the plugin is enabled with `claude plugin list`, restart Claude Code, then type `/conso`.
@@ -133,7 +147,7 @@ claude plugin uninstall conso-bar@conso-bar
 
 ```
 .claude-plugin/   plugin and marketplace manifests
-hooks/            the code: register.tsx (events and panel), dashboard.ts and agents.ts (drawings), pricing.ts (prices)
+hooks/            the code: register.tsx (events and panel), dashboard.ts and agents.ts (drawings), i18n.ts (languages), pricing.ts (prices)
 types/            the contract for the values the mod keeps
 tests/            the tests
 docs/             the images in this README, drawn with the mod's own code
