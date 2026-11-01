@@ -11,7 +11,7 @@ import { costOf } from './pricing'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.21.1'
+export const VERSION = '0.21.2'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
@@ -303,11 +303,13 @@ export const register: Register = on => {
       if (await read($, isCompacting)) return
       await update($, isCompacting, () => true)
       try {
-        const r = await $.session.compact()
-        if (r.skip !== undefined) $.ui.toast(`Compaction skipped: ${r.skip}`)
-        else $.ui.toast('Context compacted')
+        // Exactly what typing /compact does: it shows in the conversation and
+        // runs as soon as Claude is idle
+        await $.command.run({ command: 'compact' })
         const after = toSnapshot(await $.session.usage())
         await save($, after.limits.length > 0 ? { ...after, limitsAt: await $.clock.now() } : { ...after, limits: s.limits, limitsAt: s.limitsAt })
+      } catch (err) {
+        $.ui.toast(`Compact failed: ${err instanceof Error ? err.message : String(err)}`)
       } finally {
         await update($, isCompacting, () => false)
       }
