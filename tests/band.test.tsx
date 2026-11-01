@@ -10,8 +10,9 @@ const USAGE = {
   cost: { usd: 1.23 },
 }
 
+let clock: ReturnType<typeof mock.clock>
 const setup = async ($: any, on: any) => {
-  mock.clock(on, { now: Date.parse('2026-11-01T00:00:00Z') })
+  clock = mock.clock(on, { now: Date.parse('2026-11-01T00:00:00Z') })
   mock.store(on)
   on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
   on('session.usage', () => ({ value: USAGE }))
@@ -213,7 +214,8 @@ test('every agent row draws model, effort and activity', async ($, on) => {
 test('a newer version on GitHub shows the update banner', async ($, on) => {
   on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
   await setup($, on)
-  await new Promise(r => setTimeout(r, 0))
+  // The startup check runs 3 seconds after the session starts
+  await clock.advance(3000)
   const ui = await $.ui.mount(PANE)
   const alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
   expect(alts).toContain('New version v99.0.0')
@@ -243,4 +245,21 @@ test('Customize shows arrows and moving a card changes the order', async ($, on)
   // Limits moved below Context: it now has an up arrow
   expect((await ui3.find({ key: 'up-limits' }))?.text).toBe('↑')
   await ui3.unmount()
+})
+
+test('Check for updates says up to date, or why it failed', async ($, on) => {
+  let reply: { ok: boolean; status: number; text: string } = { ok: true, status: 200, text: '{ "version": "0.0.1" }' }
+  on('http.fetch', () => ({ value: { ...reply, headers: {} } }))
+  await setup($, on)
+  let ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'check-updates' })
+  await ui.unmount()
+  ui = await $.ui.mount(PANE)
+  expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toContain('Up to date')
+  reply = { ok: false, status: 503, text: '' }
+  await ui.press({ key: 'check-updates' })
+  await ui.unmount()
+  ui = await $.ui.mount(PANE)
+  expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toContain('Update check failed: GitHub answered 503')
+  await ui.unmount()
 })

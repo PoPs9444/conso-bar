@@ -87,7 +87,9 @@ Click **Customize** at the bottom of the panel: each card shows **â†‘** and **â†
 
 <img src="docs/update.svg" alt="The &quot;New version&quot; banner with its Update button" width="372">
 
-Conso checks this repository for a newer version when a session starts, then every 6 hours. When there is one, a banner appears at the top of the panel. **Update** runs Claude Code's official commands to download the new version. Restart Claude Code to apply it.
+Conso checks this repository for a newer version a few seconds after a session starts, then every 6 hours. When there is one, a banner appears at the top of the panel. **Update** runs Claude Code's official commands to download the new version. Restart Claude Code to apply it.
+
+The bottom of the panel shows your installed version and a permanent **Check for updates** button, which tells you right away whether you are up to date, or why the check failed.
 
 To update by hand:
 

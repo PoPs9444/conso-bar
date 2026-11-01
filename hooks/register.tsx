@@ -11,7 +11,7 @@ import { costOf } from './pricing'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.19.1'
+export const VERSION = '0.20.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
@@ -140,13 +140,26 @@ const isNewer = (a: string, b: string) => {
   return false
 }
 
-// Reads the version published on GitHub; silent without network
-const checkUpdate = async ($: EngineInterface) => {
-  const r = await $.http.fetch(`https://raw.githubusercontent.com/${REPO}/main/.claude-plugin/plugin.json`)
-  if (!r.ok) return
-  const latest = String((JSON.parse(r.text) as { version?: unknown }).version ?? '')
-  if (!/^\d+(\.\d+)*$/.test(latest)) return
-  await update($, updateState, cur => (cur.status === 'idle' || cur.status === 'error' ? { ...cur, latest } : cur))
+// Reads the version published on GitHub. The automatic check stays quiet on
+// failure; the manual one (Check for updates) says what happened
+const checkUpdate = async ($: EngineInterface, isManual = false) => {
+  if (isManual) await update($, updateState, (u): UpdateState => ({ ...u, status: 'checking', message: undefined }))
+  try {
+    const r = await $.http.fetch(`https://raw.githubusercontent.com/${REPO}/main/.claude-plugin/plugin.json`)
+    if (!r.ok) throw new Error(`GitHub answered ${r.status}`)
+    const latest = String((JSON.parse(r.text) as { version?: unknown }).version ?? '')
+    if (!/^\d+(\.\d+)*$/.test(latest)) throw new Error('no version found on GitHub')
+    await update($, updateState, (u): UpdateState =>
+      u.status === 'running' || u.status === 'done'
+        ? u
+        : { latest, status: isNewer(latest, VERSION) ? 'idle' : 'current', message: undefined },
+    )
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    await update($, updateState, (u): UpdateState =>
+      isManual || u.status === 'checking' ? { ...u, status: 'error', message } : { ...u, message },
+    )
+  }
 }
 
 // Claude Code's two official commands: refresh the marketplace, then the plugin
@@ -162,11 +175,12 @@ const runUpdate = async ($: EngineInterface) => {
       const r = await $.process.run(argv, { timeoutMs: 180_000 })
       if (r.exitCode !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').pop() || `code ${r.exitCode}`)
     }
-    await update($, updateState, (u): UpdateState => ({ ...u, status: 'done' }))
+    await update($, updateState, (u): UpdateState => ({ ...u, status: 'done', message: undefined }))
     $.ui.toast('Conso updated: restart Claude Code to apply it')
   } catch (err) {
-    await update($, updateState, (u): UpdateState => ({ ...u, status: 'error' }))
-    $.ui.toast(`Update failed: ${err instanceof Error ? err.message : String(err)}`)
+    const message = err instanceof Error ? err.message : String(err)
+    await update($, updateState, (u): UpdateState => ({ ...u, status: 'error', message }))
+    $.ui.toast(`Update failed: ${message}`)
   }
 }
 
@@ -200,7 +214,21 @@ const moveCard = async ($: EngineInterface, key: CardKey, by: -1 | 1) => {
 
 // Update banner: only when GitHub has a newer version
 const updateBanner = (u: UpdateState) =>
-  u.latest && isNewer(u.latest, VERSION) ? updateCard(u.latest, u.status) : null
+  u.latest && isNewer(u.latest, VERSION) && (u.status === 'idle' || u.status === 'running' || u.status === 'done' || u.status === 'error')
+    ? updateCard(u.latest, u.status)
+    : null
+
+// What the footer says about updates, after the version number
+const updateLine = (u: UpdateState) =>
+  u.status === 'checking'
+    ? 'Checking for updates…'
+    : u.status === 'current'
+      ? 'Up to date'
+      : u.status === 'error' && u.message
+        ? `Update check failed: ${u.message}`
+        : u.latest && isNewer(u.latest, VERSION)
+          ? `v${u.latest} available`
+          : ''
 
 const toSnapshot = (u: {
   cost?: { usd: number }
@@ -233,8 +261,10 @@ export const register: Register = on => {
     await update($, order, () => normalizeOrder(storedOrder))
     poller?.cancel()
     poller = $.clock.every(60_000, () => void syncFromStore($).catch(() => undefined))
-    // A new version on GitHub? At start, then every 6 hours
-    void checkUpdate($).catch(() => undefined)
+    // A new version on GitHub? A few seconds after start, then every 6 hours.
+    // On a timer, not inside this hook: work left running after the hook
+    // returns is cut off, and the check would never land
+    $.clock.after(3000, () => void checkUpdate($).catch(() => undefined))
     updatePoller?.cancel()
     updatePoller = $.clock.every(6 * 3_600_000, () => void checkUpdate($).catch(() => undefined))
     return r
@@ -376,6 +406,28 @@ export const register: Register = on => {
       </els.Box>
     )
 
+    // Footer: the installed version, what the last update check found, and a
+    // permanent Check for updates
+    const line = updateLine(upd)
+    const footer = (
+      <els.Box key="footer" flexDirection="column">
+        <els.Box flexDirection="row" alignItems="center">
+          <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
+            <els.Text dimColor>v{VERSION}</els.Text>
+          </els.Box>
+          <els.Button key="check-updates" plain dimColor onPress={() => checkUpdate($, true)}>
+            {upd.status === 'checking' ? 'Checking…' : 'Check for updates'}
+          </els.Button>
+          {customizing ? null : (
+            <els.Button key="customize" plain dimColor onPress={() => update($, isCustomizing, v => !v)}>
+              Customize
+            </els.Button>
+          )}
+        </els.Box>
+        {line ? <els.Text dimColor>{line}</els.Text> : null}
+      </els.Box>
+    )
+
     // Every drawing has a fixed height: the panel redraws on each scroll and
     // every second while an agent runs; without a height a drawing collapses
     // for an instant and throws the scroll back to the top
@@ -398,7 +450,7 @@ export const register: Register = on => {
         {/* While customizing, Done sits at the top, in reach right away */}
         {customizing ? toggle : null}
         {placed}
-        {customizing ? null : toggle}
+        {footer}
       </els.Box>
     )
   })
