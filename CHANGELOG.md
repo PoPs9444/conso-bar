@@ -2,6 +2,12 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.22.1] - 2026-11-01
+
+### Changed
+- **History in color.** Each day's bar goes from green to red with what it cost next to the week's heaviest day, and today's amount takes its bar's color.
+- **Context bar as a gradient.** The green-to-red scale spans the whole track: the bar is green on the left and its tip turns red as the context fills up.
+
 ## [0.22.0] - 2026-11-01
 
 ### Added
@@ -58,6 +64,7 @@ Every notable change to Conso. Versions follow [semantic versioning](https://sem
 ### Added
 - First public version: the 5-hour and weekly limits with a forecast, the context with **Compact**, the cost history, live agents with **Stop** and **Clear**, the terminal bar, and the update banner.
 
+[0.22.1]: https://github.com/PoPs9444/conso-bar/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/PoPs9444/conso-bar/compare/v0.21.2...v0.22.0
 [0.21.2]: https://github.com/PoPs9444/conso-bar/compare/v0.21.1...v0.21.2
 [0.21.1]: https://github.com/PoPs9444/conso-bar/compare/v0.21.0...v0.21.1
