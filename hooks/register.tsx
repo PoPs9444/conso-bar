@@ -11,7 +11,7 @@ import { costOf } from './pricing'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.19.0'
+export const VERSION = '0.19.1'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
@@ -368,6 +368,14 @@ export const register: Register = on => {
       )
     })
 
+    const toggle = (
+      <els.Box key="customize-row" flexDirection="row" justifyContent="flex-end">
+        <els.Button key="customize" plain dimColor onPress={() => update($, isCustomizing, v => !v)}>
+          {customizing ? 'Done' : 'Customize'}
+        </els.Button>
+      </els.Box>
+    )
+
     // Every drawing has a fixed height: the panel redraws on each scroll and
     // every second while an agent runs; without a height a drawing collapses
     // for an instant and throws the scroll back to the top
@@ -387,12 +395,10 @@ export const register: Register = on => {
               </els.Box>
             ))
           : null}
+        {/* While customizing, Done sits at the top, in reach right away */}
+        {customizing ? toggle : null}
         {placed}
-        <els.Box flexDirection="row" justifyContent="flex-end">
-          <els.Button key="customize" plain dimColor onPress={() => update($, isCustomizing, v => !v)}>
-            {customizing ? 'Done' : 'Customize'}
-          </els.Button>
-        </els.Box>
+        {customizing ? null : toggle}
       </els.Box>
     )
   })
