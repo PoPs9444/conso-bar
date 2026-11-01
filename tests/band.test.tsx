@@ -74,11 +74,11 @@ test('the bar stays in the terminal', async ($, on) => {
   }
 })
 
-test('the button compacts the context', async ($, on) => {
+test('the button runs /compact in the conversation', async ($, on) => {
   let compacted = 0
-  on('session.compact', () => {
-    compacted += 1
-    return { skip: 'test' }
+  on('command.run', (_: unknown, e: { command: string }) => {
+    if (e.command === 'compact') compacted += 1
+    return { text: '' }
   })
   on('ui.toast', () => ({ value: {} }))
   await setup($, on)

@@ -75,7 +75,7 @@ Then restart Claude Code. The **Conso** panel opens on the right at the start of
 ## Usage
 
 - **`/conso`** reopens the panel if you closed it.
-- **Compact** (Context card) compacts the conversation, like `/compact`.
+- **Compact** (Context card) runs `/compact` in the conversation, exactly as if you typed it.
 - **Stop** (next to a running agent): the agent can no longer start tools and hands back at its next step. A command that is already running finishes first, so nothing is left half done.
 - **Clear** (Agents card) removes finished agents to free up space.
 
