@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { AgentRun, Day, Limit, Snapshot, UpdateState } from '../types'
+import type { AgentRun, CardKey, Day, Limit, Snapshot, UpdateState } from '../types'
 
 import { agentsCard } from './agents'
 
@@ -11,7 +11,7 @@ import { costOf } from './pricing'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.18.0'
+export const VERSION = '0.19.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
@@ -20,6 +20,9 @@ const isCompacting = atom({ plugin: 'conso-bar', key: 'isCompacting' } as const,
 const agents = atom({ plugin: 'conso-bar', key: 'agentRuns' } as const, [])
 const tick = atom({ plugin: 'conso-bar', key: 'tick' } as const, 0)
 const history = atom({ plugin: 'conso-bar', key: 'history' } as const, [])
+const DEFAULT_ORDER: CardKey[] = ['limits', 'context', 'history', 'agents']
+const order = atom({ plugin: 'conso-bar', key: 'order' } as const, DEFAULT_ORDER)
+const isCustomizing = atom({ plugin: 'conso-bar', key: 'isCustomizing' } as const, false)
 const updateState = atom({ plugin: 'conso-bar', key: 'update' } as const, { status: 'idle' } as UpdateState)
 
 // Green to red as the percentage rises
@@ -167,6 +170,34 @@ const runUpdate = async ($: EngineInterface) => {
   }
 }
 
+// ---- Card order, kept across sessions
+
+const CARD_NAMES: Record<CardKey, string> = {
+  limits: 'Limits',
+  context: 'Context',
+  history: 'History',
+  agents: 'Agents',
+}
+
+// A stored order missing a card (an older version) gets it back at the end
+const normalizeOrder = (stored: unknown): CardKey[] => {
+  const known = Array.isArray(stored) ? stored.filter((k): k is CardKey => k in CARD_NAMES) : []
+  const unique = [...new Set(known)]
+  return [...unique, ...DEFAULT_ORDER.filter(k => !unique.includes(k))]
+}
+
+const moveCard = async ($: EngineInterface, key: CardKey, by: -1 | 1) => {
+  const next = await update($, order, list => {
+    const i = list.indexOf(key)
+    const j = i + by
+    if (i < 0 || j < 0 || j >= list.length) return list
+    const copy = [...list]
+    ;[copy[i], copy[j]] = [copy[j]!, copy[i]!]
+    return copy
+  })
+  await $.store.set('cardOrder', next)
+}
+
 // Update banner: only when GitHub has a newer version
 const updateBanner = (u: UpdateState) =>
   u.latest && isNewer(u.latest, VERSION) ? updateCard(u.latest, u.status) : null
@@ -198,6 +229,8 @@ export const register: Register = on => {
     }
     await save($, first)
     await remember($, first).catch(() => undefined)
+    const storedOrder = await $.store.get('cardOrder').catch(() => undefined)
+    await update($, order, () => normalizeOrder(storedOrder))
     poller?.cancel()
     poller = $.clock.every(60_000, () => void syncFromStore($).catch(() => undefined))
     // A new version on GitHub? At start, then every 6 hours
@@ -265,6 +298,76 @@ export const register: Register = on => {
       </els.Box>
     )
 
+    const blocks: Record<CardKey, RenderChildren> = {
+      limits: limits.length > 0 ? limits.map(c => frame(c.key, <els.Svg source={c.svg} alt={c.alt} height={c.h} />)) : null,
+      context: ctx
+        ? frame('ctx', [
+            <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
+              <els.Svg source={ctx.title} alt="Context" width={80} height={14} />
+              <els.Button key="compact" plain dimColor onPress={compact}>
+                {busy ? 'Compact…' : 'Compact'}
+              </els.Button>
+            </els.Box>,
+            <els.Svg key="body" source={ctx.svg} alt={ctx.alt} height={ctx.h} />,
+          ])
+        : null,
+      history: hist ? frame('hist', <els.Svg source={hist.svg} alt={hist.alt} height={hist.h} />) : null,
+      agents: frame('agents', [
+        <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
+          <els.Svg source={ag.head} alt="Agents" width={150} height={14} />
+          {ag.finished > 0 ? (
+            <els.Button key="clear" plain dimColor onPress={clearFinished}>
+              Clear
+            </els.Button>
+          ) : null}
+        </els.Box>,
+        ag.rows.length === 0 ? <els.Svg key="empty" source={ag.empty} alt="No agents" height={ag.emptyH} /> : null,
+        ...ag.rows.map(r => (
+          <els.Box key={r.id} flexDirection="column">
+            <els.Svg source={r.top.svg} alt={r.alt} height={r.top.h} />
+            <els.Box flexDirection="row" alignItems="center">
+              <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
+                <els.Svg source={r.mid.svg} alt={r.mid.alt} height={r.mid.h} />
+              </els.Box>
+              {r.canStop ? (
+                <els.Button key={`stop-${r.id}`} plain dimColor onPress={stop(r.id)}>
+                  Stop
+                </els.Button>
+              ) : null}
+            </els.Box>
+            <els.Svg source={r.bottom.svg} alt={r.bottom.alt} height={r.bottom.h} />
+          </els.Box>
+        )),
+      ]),
+    }
+
+    // Customize: each block gets a header with its name and ↑ ↓ to move it
+    const cardOrder = await read($, order)
+    const customizing = await read($, isCustomizing)
+    const placed = cardOrder.map((key, i) => {
+      if (!customizing) return <els.Box key={`block-${key}`} flexDirection="column" gap={1}>{blocks[key]}</els.Box>
+      return (
+        <els.Box key={`block-${key}`} flexDirection="column" gap={1}>
+          <els.Box flexDirection="row" alignItems="center" gap={1}>
+            <els.Box flexGrow={1}>
+              <els.Text dimColor>{CARD_NAMES[key]}</els.Text>
+            </els.Box>
+            {i > 0 ? (
+              <els.Button key={`up-${key}`} plain dimColor onPress={() => moveCard($, key, -1)}>
+                ↑
+              </els.Button>
+            ) : null}
+            {i < cardOrder.length - 1 ? (
+              <els.Button key={`down-${key}`} plain dimColor onPress={() => moveCard($, key, 1)}>
+                ↓
+              </els.Button>
+            ) : null}
+          </els.Box>
+          {blocks[key] ?? <els.Text dimColor>Nothing to show yet</els.Text>}
+        </els.Box>
+      )
+    })
+
     // Every drawing has a fixed height: the panel redraws on each scroll and
     // every second while an agent runs; without a height a drawing collapses
     // for an instant and throws the scroll back to the top
@@ -284,46 +387,12 @@ export const register: Register = on => {
               </els.Box>
             ))
           : null}
-        {limits.map(c => frame(c.key, <els.Svg source={c.svg} alt={c.alt} height={c.h} />))}
-        {ctx ? (
-          frame('ctx', [
-            <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
-              <els.Svg source={ctx.title} alt="Context" width={80} height={14} />
-              <els.Button key="compact" plain dimColor onPress={compact}>
-                {busy ? 'Compact…' : 'Compact'}
-              </els.Button>
-            </els.Box>,
-            <els.Svg key="body" source={ctx.svg} alt={ctx.alt} height={ctx.h} />,
-          ])
-        ) : null}
-        {hist ? frame('hist', <els.Svg source={hist.svg} alt={hist.alt} height={hist.h} />) : null}
-        {frame('agents', [
-          <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
-            <els.Svg source={ag.head} alt="Agents" width={150} height={14} />
-            {ag.finished > 0 ? (
-              <els.Button key="clear" plain dimColor onPress={clearFinished}>
-                Clear
-              </els.Button>
-            ) : null}
-          </els.Box>,
-          ag.rows.length === 0 ? <els.Svg key="empty" source={ag.empty} alt="No agents" height={ag.emptyH} /> : null,
-          ...ag.rows.map(r => (
-            <els.Box key={r.id} flexDirection="column">
-              <els.Svg source={r.top.svg} alt={r.alt} height={r.top.h} />
-              <els.Box flexDirection="row" alignItems="center">
-                <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
-                  <els.Svg source={r.mid.svg} alt={r.mid.alt} height={r.mid.h} />
-                </els.Box>
-                {r.canStop ? (
-                  <els.Button key={`stop-${r.id}`} plain dimColor onPress={stop(r.id)}>
-                    Stop
-                  </els.Button>
-                ) : null}
-              </els.Box>
-              <els.Svg source={r.bottom.svg} alt={r.bottom.alt} height={r.bottom.h} />
-            </els.Box>
-          )),
-        ])}
+        {placed}
+        <els.Box flexDirection="row" justifyContent="flex-end">
+          <els.Button key="customize" plain dimColor onPress={() => update($, isCustomizing, v => !v)}>
+            {customizing ? 'Done' : 'Customize'}
+          </els.Button>
+        </els.Box>
       </els.Box>
     )
   })

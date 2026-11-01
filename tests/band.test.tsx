@@ -206,7 +206,7 @@ test('every agent row draws model, effort and activity', async ($, on) => {
   // The app does not show a Svg without alt text: none may lack one
   expect(alts.every(a => a.length > 0)).toBe(true)
   expect(alts).toContain('Opus 5.5, High effort')
-  expect(alts).toContain('Bash, 1 step, 128 tokens, ≈ $0.012')
+  expect(alts).toContain('Bash, ≈ $0.012, 128 tokens, 1 step')
   await ui.unmount()
 })
 
@@ -227,4 +227,20 @@ test('no banner when GitHub has an older version', async ($, on) => {
   const ui = await $.ui.mount(PANE)
   expect(await ui.find({ key: 'update' })).toBe(undefined)
   await ui.unmount()
+})
+
+test('Customize shows arrows and moving a card changes the order', async ($, on) => {
+  await setup($, on)
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'customize' })
+  await ui.unmount()
+  const ui2 = await $.ui.mount(PANE)
+  expect((await ui2.find({ key: 'customize' }))?.text).toBe('Done')
+  expect(await ui2.find({ key: 'up-limits' })).toBe(undefined)
+  await ui2.press({ key: 'down-limits' })
+  await ui2.unmount()
+  const ui3 = await $.ui.mount(PANE)
+  // Limits moved below Context: it now has an up arrow
+  expect((await ui3.find({ key: 'up-limits' }))?.text).toBe('↑')
+  await ui3.unmount()
 })

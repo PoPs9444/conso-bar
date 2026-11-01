@@ -5,6 +5,13 @@
 **The usage panel for Claude Code.**
 Limits, context, costs and live agents, in a panel right next to your conversation.
 
+[![Version](https://img.shields.io/github/v/release/PoPs9444/conso-bar?label=version&color=4ade80)](https://github.com/PoPs9444/conso-bar/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-60a5fa)](LICENSE)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#installation)
+[![Stars](https://img.shields.io/github/stars/PoPs9444/conso-bar?style=flat&color=facc15)](https://github.com/PoPs9444/conso-bar/stargazers)
+
+**Stop guessing how close you are to your limits.** Conso shows your 5-hour and weekly usage, forecasts when you will hit them, tracks what every agent costs, and lets you compact or stop work in one click.
+
 <img src="docs/panel.svg" alt="The Conso panel: 5-hour and weekly limits, context, cost history and running agents" width="372">
 
 </div>
@@ -16,12 +23,14 @@ Limits, context, costs and live agents, in a panel right next to your conversati
 - [What the panel shows](#what-the-panel-shows)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Customize the layout](#customize-the-layout)
 - [Updates](#updates)
 - [How the numbers are computed](#how-the-numbers-are-computed)
 - [Privacy](#privacy)
 - [FAQ](#faq)
 - [Uninstall](#uninstall)
 - [Development](#development)
+- [Contributing](#contributing)
 
 ## What the panel shows
 
@@ -69,6 +78,10 @@ Then restart Claude Code. The **Conso** panel opens on the right at the start of
 - **Compact** (Context card) compacts the conversation, like `/compact`.
 - **Stop** (next to a running agent): the agent can no longer start tools and hands back at its next step. A command that is already running finishes first, so nothing is left half done.
 - **Clear** (Agents card) removes finished agents to free up space.
+
+## Customize the layout
+
+Click **Customize** at the bottom of the panel: each card shows **↑** and **↓** to move it up or down. Click **Done** when you are finished. Your order is remembered in every conversation.
 
 ## Updates
 
@@ -135,3 +148,13 @@ claude plugin test .
 ```
 
 To release a version, bump `version` in `.claude-plugin/plugin.json` **and** the `VERSION` constant in `hooks/register.tsx`, then push to `main`. The update banner will show up for everyone.
+
+## Contributing
+
+Issues and pull requests are welcome. Please run `claude plugin validate .` and `claude plugin test .` before opening a pull request.
+
+If Conso saves you a surprise rate limit, a ⭐ on the repository helps others find it.
+
+## License
+
+[MIT](LICENSE)
