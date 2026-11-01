@@ -98,6 +98,22 @@ export const fluid = (h: number, body: string, style = '') =>
 // Anchored to the right edge: negative coordinates from that edge
 export const right = (body: string) => `<svg x="100%" y="0" width="1" height="1" overflow="visible">${body}</svg>`
 
+// Fades and clips what runs past the right edge, keeping `reserve` pixels free
+// at the edge (for a duration drawn there): the cut follows the real width
+let fadeId = 0
+export const fadeRight = (h: number, reserve: number, body: string) => {
+  const id = `fade${fadeId++}`
+  return (
+    `<defs><linearGradient id="${id}g"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>` +
+    `<mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="${h}">` +
+    `<rect x="0" y="0" width="100%" height="${h}" fill="#fff"/>` +
+    `<svg x="100%" y="0" width="1" height="${h}" overflow="visible">` +
+    `<rect x="${-(reserve + 18)}" y="0" width="18" height="${h}" fill="url(#${id}g)"/>` +
+    (reserve > 0 ? `<rect x="${-reserve}" y="0" width="${reserve}" height="${h}" fill="#000"/>` : '') +
+    `</svg></mask></defs><g mask="url(#${id})">${body}</g>`
+  )
+}
+
 // Full-width bar, filled in percent
 const bar = (y: number, p: number, color: string) =>
   `<rect class="trackfill" x="0" y="${y}" width="100%" height="6" rx="3"/>` +

@@ -1,11 +1,9 @@
 import type { AgentRun } from '../types'
 
-import { HEX, STYLE, esc, fluid, heat, inline, num, title } from './dashboard'
+import { HEX, STYLE, esc, fadeRight, fluid, heat, inline, num, title } from './dashboard'
 
 // Live agents card: model, effort, duration, activity, cost
 
-// Minimum card width: used to cut titles that are too long
-const MIN_W = 230
 
 // claude-opus-5-5 → Opus 5.5; an alias or an unknown name stays as it is
 export const modelName = (id: string) => {
@@ -106,19 +104,26 @@ const rowParts = (a: AgentRun, o: number, now: number) => {
   const time = duration((a.endedAt ?? now) - a.startedAt)
 
   const side = running ? (a.isStopping ? `Stopping… · ${time}` : time) : `${STATUS[a.status]} · ${time}`
-  // The title stops before the duration (13 px ≈ 6.6 px per character)
-  const room = Math.floor((MIN_W - 24 - side.length * 6.2 - 8) / 6.6)
+  // The title fades out before the duration, at the drawing's real width
+  // (11.5 px semibold ≈ 7 px per character, rounded up to stay clear)
+  const sideW = Math.ceil(side.length * 7) + 10
 
   const top =
     (o > 0 ? `<line class="divider" x1="0" x2="100%" y1="0.5" y2="0.5"/>` : '') +
     status(a.status, 8, o + 9) +
-    `<text class="${running ? 't1' : 't2'}" x="24" y="${o + 13}" font-size="13" font-weight="600">${esc(clip(a.description || a.type, Math.max(8, room)))}</text>` +
+    fadeRight(
+      o + 18,
+      sideW,
+      `<text class="${running ? 't1' : 't2'}" x="24" y="${o + 13}" font-size="13" font-weight="600">${esc(clip(a.description || a.type, 90))}</text>`,
+    ) +
     `<text x="100%" y="${o + 13}" text-anchor="end" font-size="11.5" font-weight="600" font-variant-numeric="tabular-nums" fill="${running ? HEX.green : a.status === 'done' ? '#6e6e74' : HEX.red}">${esc(side)}</text>`
 
   const dim = running ? '' : ' fill-opacity=".65"'
   const sep = `<tspan class="t3">  ·  </tspan>`
   const eff = effortName(a.effort)
-  const mid =
+  const mid = fadeRight(
+    20,
+    0,
     `<text x="24" y="15" font-size="12">` +
     `<tspan font-weight="700" fill="${familyColor(a.model)}"${dim}>${esc(modelName(a.model))}</tspan>` +
     // Only the level takes its color, the word "effort" stays white
@@ -127,24 +132,26 @@ const rowParts = (a: AgentRun, o: number, now: number) => {
         ? `${sep}<tspan font-weight="600" fill="${effortColor(effortLevel(a.effort))}"${dim}>${esc(eff.slice(0, -7))}</tspan><tspan class="t1" font-weight="600"${dim}> effort</tspan>`
         : `${sep}<tspan font-weight="600" fill="${effortColor(effortLevel(a.effort))}"${dim}>${esc(eff)}</tspan>`
       : '') +
-    `</text>`
+      `</text>`,
+  )
 
+  // Most important first: on a narrow panel the end of the line fades out
   const bits = [
     running && a.lastTool ? `<tspan class="t1" font-weight="600">▸ ${esc(a.lastTool)}</tspan>` : '',
-    `<tspan class="t1" font-weight="600">${a.steps}</tspan><tspan class="t3"> step${a.steps > 1 ? 's' : ''}</tspan>`,
+    a.usd > 0 ? `<tspan font-weight="700" fill="${HEX.gold}">≈ $${esc(money(a.usd))}</tspan>` : '',
     a.outputTokens > 0
       ? `<tspan class="t1" font-weight="600">${esc(compactNum(a.outputTokens))}</tspan><tspan class="t3"> tokens</tspan>`
       : '',
-    a.usd > 0 ? `<tspan font-weight="700" fill="${HEX.gold}">≈ $${esc(money(a.usd))}</tspan>` : '',
+    `<tspan class="t1" font-weight="600">${a.steps}</tspan><tspan class="t3"> step${a.steps > 1 ? 's' : ''}</tspan>`,
   ].filter(Boolean)
-  const bottom = `<text x="24" y="13" font-size="11"${dim}>${bits.join('<tspan class="t3">  ·  </tspan>')}</text>`
+  const bottom = fadeRight(17, 0, `<text x="24" y="13" font-size="11"${dim}>${bits.join('<tspan class="t3">  ·  </tspan>')}</text>`)
 
   // Every drawing has its alt text: the app does not show a Svg without one
   const activity = [
     running && a.lastTool ? a.lastTool : '',
-    `${a.steps} step${a.steps > 1 ? 's' : ''}`,
-    a.outputTokens > 0 ? `${compactNum(a.outputTokens)} tokens` : '',
     a.usd > 0 ? `≈ $${money(a.usd)}` : '',
+    a.outputTokens > 0 ? `${compactNum(a.outputTokens)} tokens` : '',
+    `${a.steps} step${a.steps > 1 ? 's' : ''}`,
   ]
     .filter(Boolean)
     .join(', ')

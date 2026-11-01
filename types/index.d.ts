@@ -39,6 +39,9 @@ export type UpdateState = {
   status: 'idle' | 'running' | 'done' | 'error'
 }
 
+// The panel's blocks, in the order the person chose
+export type CardKey = 'limits' | 'context' | 'history' | 'agents'
+
 declare module 'claude-code' {
   interface PluginState {
     'conso-bar': {
@@ -48,6 +51,8 @@ declare module 'claude-code' {
       tick: number
       history: Day[]
       update: UpdateState
+      order: CardKey[]
+      isCustomizing: boolean
     }
   }
 }
