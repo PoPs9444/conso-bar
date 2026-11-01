@@ -276,12 +276,14 @@ export const contextCard = (s: Snapshot) => {
 }
 
 // "New version" banner at the top of the panel
-export const updateCard = (latest: string, status: 'idle' | 'running' | 'done' | 'error') => {
+export const updateCard = (latest: string, status: 'idle' | 'running' | 'done' | 'error', needsRestart = false) => {
   const text =
     status === 'running'
       ? `Updating to v${latest}…`
       : status === 'done'
-        ? `v${latest} installed · restart Claude Code`
+        ? needsRestart
+          ? `v${latest} installed · restart Claude Code`
+          : `v${latest} installed · reloading…`
         : `New version v${latest}`
   const color = status === 'done' ? HEX.green! : HEX.blue!
   const svg = fluid(

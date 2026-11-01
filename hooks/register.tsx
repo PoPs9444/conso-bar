@@ -11,7 +11,7 @@ import { costOf } from './pricing'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.20.0'
+export const VERSION = '0.21.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
@@ -176,7 +176,15 @@ const runUpdate = async ($: EngineInterface) => {
       if (r.exitCode !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').pop() || `code ${r.exitCode}`)
     }
     await update($, updateState, (u): UpdateState => ({ ...u, status: 'done', message: undefined }))
-    $.ui.toast('Conso updated: restart Claude Code to apply it')
+    // Load the new version right away: /reload-plugins swaps the plugins in
+    // this session, no restart. Where it cannot run, a restart applies it
+    try {
+      await $.command.run({ command: 'reload-plugins' })
+      $.ui.toast('Conso updated and reloaded')
+    } catch {
+      await update($, updateState, (u): UpdateState => ({ ...u, message: 'restart' }))
+      $.ui.toast('Conso updated: restart Claude Code to apply it')
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     await update($, updateState, (u): UpdateState => ({ ...u, status: 'error', message }))
@@ -215,7 +223,7 @@ const moveCard = async ($: EngineInterface, key: CardKey, by: -1 | 1) => {
 // Update banner: only when GitHub has a newer version
 const updateBanner = (u: UpdateState) =>
   u.latest && isNewer(u.latest, VERSION) && (u.status === 'idle' || u.status === 'running' || u.status === 'done' || u.status === 'error')
-    ? updateCard(u.latest, u.status)
+    ? updateCard(u.latest, u.status, u.message === 'restart')
     : null
 
 // What the footer says about updates, after the version number

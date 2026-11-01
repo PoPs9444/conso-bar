@@ -263,3 +263,28 @@ test('Check for updates says up to date, or why it failed', async ($, on) => {
   expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toContain('Update check failed: GitHub answered 503')
   await ui.unmount()
 })
+
+test('Update installs the new version, then reloads the plugins', async ($, on) => {
+  const ran: string[][] = []
+  const commands: string[] = []
+  on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
+  on('process.run', (_: unknown, e: { argv: string[] }) => {
+    ran.push(e.argv)
+    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+  })
+  on('command.run', (_: unknown, e: { command: string }) => {
+    commands.push(e.command)
+    return { text: '' }
+  })
+  on('ui.toast', () => ({ value: {} }))
+  await setup($, on)
+  await clock.advance(3000)
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'update' })
+  await ui.unmount()
+  expect(ran).toEqual([
+    ['claude', 'plugin', 'marketplace', 'update', 'conso-bar'],
+    ['claude', 'plugin', 'update', 'conso-bar@conso-bar'],
+  ])
+  expect(commands).toContain('reload-plugins')
+})

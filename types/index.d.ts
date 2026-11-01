@@ -39,7 +39,8 @@ export type UpdateState = {
   // checking: asking GitHub; current: no newer version; running: installing;
   // done: installed, restart needed; error: the last check or install failed
   status: 'idle' | 'checking' | 'current' | 'running' | 'done' | 'error'
-  // why the last check or install failed, shown under the panel
+  // why the last check or install failed, shown under the panel; 'restart'
+  // after an install that could not reload the plugins by itself
   message?: string
 }
 
