@@ -70,8 +70,8 @@ Restart Claude Code. The **Conso** panel opens on the right at the start of ever
 | --- | --- |
 | **5-hour limit** | Percentage used on a green-to-red gauge, time until the reset, and a forecast. |
 | **Weekly limit** | The same for the week, plus the cost of the current session. |
-| **Context** | Tokens used out of the window, and the **Compact** button. |
-| **History** | Today's cost and a bar for each of the last 7 days. |
+| **Context** | Tokens used out of the window on a green-to-red gradient bar, and the **Compact** button. |
+| **History** | Today's cost and a bar for each of the last 7 days, from green for a light day to red for the heaviest. |
 | **Agents** | Every agent of the session, live. Running ones first. |
 
 Color is kept for the numbers that matter: percentages turn from green to red as they approach 100%, and each model family has its own color (Fable red, Opus violet, Sonnet blue, Haiku teal).

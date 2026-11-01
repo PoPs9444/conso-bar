@@ -408,3 +408,29 @@ test("an agent's steps still reach the card", async ($, on) => {
   expect(alts.filter(a => a.includes(': Opus 5.5')).length).toBe(0)
   await ui.unmount()
 })
+
+test('history bars go from green to red with what each day cost', async ($, on) => {
+  const now = Date.parse('2026-11-01T00:00:00Z')
+  const key = (ms: number) => {
+    const d = new Date(ms)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  // A light day yesterday, the heaviest day two days ago; today adds the session's $1.23
+  const costDays = { [key(now - 86_400_000)]: 0.5, [key(now - 2 * 86_400_000)]: 10 }
+  mock.clock(on, { now })
+  mock.store(on, { costDays })
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: USAGE }))
+  on('session.id', () => ({ value: 'session-test' }))
+  on('command.register', () => ({ value: { command: 'conso' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount(PANE)
+  const hist = (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('History'))
+  const fills = [...String(hist?.props.source).matchAll(/<rect x="-?[\d.]+" y="[\d.]+" width="10" height="[\d.]+" rx="3" fill="(#[0-9a-f]{6})"/g)].map(m => m[1])
+  expect(fills.length).toBe(7)
+  // The heaviest day is red, a light day is green
+  expect(fills[4]).toBe('#f04242')
+  expect(fills[5]).toBe('#42f067')
+  await ui.unmount()
+})

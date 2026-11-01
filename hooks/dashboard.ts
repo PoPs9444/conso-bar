@@ -126,10 +126,16 @@ export const fadeRight = (h: number, reserve: number, body: string) => {
   )
 }
 
-// Full-width bar, filled in percent
-const bar = (y: number, p: number, color: string) =>
+// Full-width bar, filled in percent. The green-to-red scale spans the whole
+// track, so the fill shows it up to where it stops: green on the left, and a
+// tip that turns red as it nears the right end
+const SCALE = [0, 25, 50, 65, 80, 90, 100]
+  .map(p => `<stop offset="${p}%" stop-color="${heat(p)}"/>`)
+  .join('')
+const bar = (y: number, p: number) =>
+  `<defs><linearGradient id="heatbar" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100%" y2="0">${SCALE}</linearGradient></defs>` +
   `<rect class="trackfill" x="0" y="${y}" width="100%" height="6" rx="3"/>` +
-  (p > 0 ? `<rect fill="${color}" x="0" y="${y}" width="${Math.max(1.5, Math.min(100, p)).toFixed(1)}%" height="6" rx="3"/>` : '')
+  (p > 0 ? `<rect fill="url(#heatbar)" x="0" y="${y}" width="${Math.max(1.5, Math.min(100, p)).toFixed(1)}%" height="6" rx="3"/>` : '')
 
 const ring = (cx: number, cy: number, r: number, p: number, color: string) => {
   const c = 2 * Math.PI * r
@@ -214,13 +220,16 @@ const limitCard = (name: string, l: Limit, now: number, t: Strings, usd?: number
   }
 }
 
-// Cost of recent days across all sessions: today in large type, the week as bars
+// Cost of recent days across all sessions: today in large type, the week as bars.
+// Each day takes its color from what it cost next to the week's biggest day:
+// green for a light day, red for the heaviest
 export const historyCard = (days: readonly Day[], t: Strings) => {
   if (days.length === 0) return null
   const H = 80
   const today = days[days.length - 1]!
   const week = days.reduce((sum, d) => sum + d.usd, 0)
   const max = Math.max(...days.map(d => d.usd), 0.01)
+  const color = (usd: number) => heat((usd / max) * 100)
   const bw = 10
   const gap = 5
   const x0 = -(days.length * bw + (days.length - 1) * gap)
@@ -230,7 +239,7 @@ export const historyCard = (days: readonly Day[], t: Strings) => {
     const x = x0 + i * (bw + gap)
     const isToday = i === days.length - 1
     bars +=
-      `<rect x="${x}" y="${(60 - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3" fill="${HEX.gold}" fill-opacity="${isToday ? 1 : 0.45}"/>` +
+      `<rect x="${x}" y="${(60 - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3" fill="${color(d.usd)}" fill-opacity="${isToday ? 1 : 0.75}"/>` +
       `<text class="${isToday ? 't1' : 't3'}" x="${x + bw / 2}" y="76" text-anchor="middle" font-size="9.5" font-weight="600">${esc(t.days[new Date(`${d.date}T12:00:00`).getDay()] ?? '')}</text>`
   })
   const svg = fluid(
@@ -241,7 +250,7 @@ export const historyCard = (days: readonly Day[], t: Strings) => {
       -x0 + 10,
       title(0, 11, t.history.toUpperCase()) +
         `<text class="t3" x="0" y="33" font-size="11">${esc(t.today)}</text>` +
-        `<text x="0" y="57" font-size="21" font-weight="700" fill="${HEX.gold}">${esc(dollars(today.usd))}</text>` +
+        `<text x="0" y="57" font-size="21" font-weight="700" fill="${color(today.usd)}">${esc(dollars(today.usd))}</text>` +
         `<text x="0" y="76" font-size="11"><tspan class="t3">${esc(t.week)}  </tspan><tspan class="t1" font-weight="700">${esc(dollars(week))}</tspan></text>`,
     ) + right(bars),
   )
@@ -283,7 +292,7 @@ export const contextCard = (s: Snapshot, t: Strings) => {
     H,
     fadeRight(32, Math.ceil(tokenLabel.length * 6.6) + 10, `<text x="0" y="24" font-size="22" font-weight="700" fill="${color}">${esc(num(cp, 1))}%</text>`) +
       `<text x="100%" y="24" text-anchor="end" font-size="11.5"><tspan font-weight="700" fill="${color}">${esc(tokens(s.tokens))}</tspan><tspan class="t2"> / ${esc(tokens(s.window))}</tspan><tspan class="t3"> ${esc(t.tokens)}</tspan></text>` +
-      bar(36, cp, color),
+      bar(36, cp),
   )
   // The title alone, drawn like the other cards' titles, as wide as its word
   const name = t.context.toUpperCase()

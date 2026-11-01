@@ -13,7 +13,7 @@ import { costOf } from './pricing'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.22.0'
+export const VERSION = '0.22.1'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
