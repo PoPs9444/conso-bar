@@ -81,7 +81,7 @@ Then restart Claude Code. The **Conso** panel opens on the right at the start of
 
 ## Customize the layout
 
-Click **Customize** at the bottom of the panel: each card shows **↑** and **↓** to move it up or down. Click **Done** when you are finished. Your order is remembered in every conversation.
+Click **Customize** at the bottom of the panel: each card shows **↑** and **↓** to move it up or down. Click **Done** at the top of the panel when you are finished. Your order is remembered in every conversation.
 
 ## Updates
 
