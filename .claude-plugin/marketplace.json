@@ -1,0 +1,6 @@
+{
+  "name": "conso-bar",
+  "owner": { "name": "PoPs9444" },
+  "description": "Conso: the usage panel for Claude Code",
+  "plugins": [{ "name": "conso-bar", "source": "./" }]
+}

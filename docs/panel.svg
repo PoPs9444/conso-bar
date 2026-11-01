@@ -1,0 +1,306 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="372" height="697" viewBox="0 0 372 697"><rect width="100%" height="100%" rx="16" fill="#1a1a1a"/><rect x="16.5" y="16.5" width="339" height="83" rx="12" fill="#ffffff" fill-opacity=".035" stroke="#ffffff" stroke-opacity=".09"/><svg x="32" y="28" width="308" height="60" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+</style><circle class="track" stroke="#ffffff" stroke-opacity=".08" fill="none" cx="30" cy="30" r="26" stroke-width="7"/><circle cx="30" cy="30" r="26" stroke="#b8f042" stroke-width="7" fill="none" stroke-linecap="round"
+          stroke-dasharray="55.54 163.36" transform="rotate(-90 30 30)"/><text x="30" y="35" text-anchor="middle" font-size="14.5" font-weight="700" fill="#b8f042">34%</text><text class="t2" fill="#9a9aa0" x="72" y="17" font-size="11" font-weight="600" letter-spacing=".7">5-HOUR LIMIT</text><text class="t2" fill="#9a9aa0" x="100%" y="17" text-anchor="end" font-size="12" font-weight="600" font-variant-numeric="tabular-nums">2h 24m</text><text x="72" y="43" font-size="11.5" font-weight="600" fill="#f0b242">≈ 65% at reset</text></svg><rect x="16.5" y="110.5" width="339" height="95" rx="12" fill="#ffffff" fill-opacity=".035" stroke="#ffffff" stroke-opacity=".09"/><svg x="32" y="122" width="308" height="72" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+</style><circle class="track" stroke="#ffffff" stroke-opacity=".08" fill="none" cx="30" cy="36" r="26" stroke-width="7"/><circle cx="30" cy="36" r="26" stroke="#ddf042" stroke-width="7" fill="none" stroke-linecap="round"
+          stroke-dasharray="66.98 163.36" transform="rotate(-90 30 36)"/><text x="30" y="41" text-anchor="middle" font-size="14.5" font-weight="700" fill="#ddf042">41%</text><text class="t2" fill="#9a9aa0" x="72" y="14" font-size="11" font-weight="600" letter-spacing=".7">WEEKLY LIMIT</text><text class="t2" fill="#9a9aa0" x="100%" y="14" text-anchor="end" font-size="12" font-weight="600" font-variant-numeric="tabular-nums">3d 4h</text><text x="72" y="42" font-size="22" font-weight="700" fill="#facc15">$12.48</text><text x="72" y="63" font-size="11.5" font-weight="600" fill="#f09d42">≈ 76% at reset</text></svg><rect x="16.5" y="216.5" width="339" height="89" rx="12" fill="#ffffff" fill-opacity=".035" stroke="#ffffff" stroke-opacity=".09"/><svg x="32" y="228" viewBox="0 0 80 14" width="80" height="14"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+</style><text class="t2" fill="#9a9aa0" x="0" y="11" font-size="11" font-weight="600" letter-spacing=".7">CONTEXT</text></svg><text x="340" y="240" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" font-size="13" fill="#9a9aa0">Compact</text><svg x="32" y="250" width="308" height="44" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+</style><text x="0" y="24" font-size="22" font-weight="700" fill="#def042">41.2%</text><text x="100%" y="24" text-anchor="end" font-size="11.5"><tspan font-weight="700" fill="#def042">412k</tspan><tspan class="t2" fill="#9a9aa0"> / 1M</tspan><tspan class="t3" fill="#6e6e74"> tokens</tspan></text><rect class="trackfill" fill="#ffffff" fill-opacity=".08" x="0" y="36" width="100%" height="6" rx="3"/><rect fill="#def042" x="0" y="36" width="41.2%" height="6" rx="3"/></svg><rect x="16.5" y="316.5" width="339" height="103" rx="12" fill="#ffffff" fill-opacity=".035" stroke="#ffffff" stroke-opacity=".09"/><svg x="32" y="328" width="308" height="80" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+</style><text class="t2" fill="#9a9aa0" x="0" y="11" font-size="11" font-weight="600" letter-spacing=".7">HISTORY</text><text class="t3" fill="#6e6e74" x="0" y="33" font-size="11">Today</text><text x="0" y="57" font-size="21" font-weight="700" fill="#facc15">$12.48</text><text x="0" y="76" font-size="11"><tspan class="t3" fill="#6e6e74">7 days  </tspan><tspan class="t1" fill="#f2f2f2" font-weight="700">$57.08</tspan></text><svg x="100%" y="0" width="1" height="1" overflow="visible"><rect x="-100" y="49.1" width="10" height="10.9" rx="3" fill="#facc15" fill-opacity="0.45"/><text class="t3" fill="#6e6e74" x="-95" y="76" text-anchor="middle" font-size="9.5" font-weight="600">F</text><rect x="-85" y="30.4" width="10" height="29.6" rx="3" fill="#facc15" fill-opacity="0.45"/><text class="t3" fill="#6e6e74" x="-80" y="76" text-anchor="middle" font-size="9.5" font-weight="600">S</text><rect x="-70" y="41.7" width="10" height="18.3" rx="3" fill="#facc15" fill-opacity="0.45"/><text class="t3" fill="#6e6e74" x="-65" y="76" text-anchor="middle" font-size="9.5" font-weight="600">S</text><rect x="-55" y="18.0" width="10" height="42.0" rx="3" fill="#facc15" fill-opacity="0.45"/><text class="t3" fill="#6e6e74" x="-50" y="76" text-anchor="middle" font-size="9.5" font-weight="600">M</text><rect x="-40" y="36.4" width="10" height="23.6" rx="3" fill="#facc15" fill-opacity="0.45"/><text class="t3" fill="#6e6e74" x="-35" y="76" text-anchor="middle" font-size="9.5" font-weight="600">T</text><rect x="-25" y="27.2" width="10" height="32.8" rx="3" fill="#facc15" fill-opacity="0.45"/><text class="t3" fill="#6e6e74" x="-20" y="76" text-anchor="middle" font-size="9.5" font-weight="600">W</text><rect x="-10" y="16.0" width="10" height="44.0" rx="3" fill="#facc15" fill-opacity="1"/><text class="t1" fill="#f2f2f2" x="-5" y="76" text-anchor="middle" font-size="9.5" font-weight="600">T</text></svg></svg><rect x="16.5" y="430.5" width="339" height="250" rx="12" fill="#ffffff" fill-opacity=".035" stroke="#ffffff" stroke-opacity=".09"/><svg x="32" y="442" viewBox="0 0 150 14" width="150" height="14"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+</style><text class="t2" fill="#9a9aa0" x="0" y="11" font-size="11" font-weight="600" letter-spacing=".7">AGENTS</text><text class="up" fill="#4ade80" x="64" y="11" font-size="11" font-weight="600">2 running</text></svg><text x="340" y="454" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" font-size="13" fill="#9a9aa0">Clear</text><svg x="32" y="464" width="308" height="18" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+
+  .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
+  .divider { stroke: #ffffff; stroke-opacity: .07; }
+  @media (prefers-color-scheme: light) {
+    .violet { color: #7c3aed; } .slate { color: #64748b; } .teal { color: #0d9488; }
+    .divider { stroke: #000000; stroke-opacity: .07; }
+  }
+</style><circle cx="8" cy="9" r="6.5" fill="none" stroke="#4ade80" stroke-opacity=".35" stroke-width="1.5"/><circle cx="8" cy="9" r="3.5" fill="#4ade80"/><text class="t1" fill="#f2f2f2" x="24" y="13" font-size="13" font-weight="600">Security review of the…</text><text x="100%" y="13" text-anchor="end" font-size="11.5" font-weight="600" font-variant-numeric="tabular-nums" fill="#4ade80">1m 36s</text></svg><svg x="32" y="482" width="248" height="20" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+
+  .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
+  .divider { stroke: #ffffff; stroke-opacity: .07; }
+  @media (prefers-color-scheme: light) {
+    .violet { color: #7c3aed; } .slate { color: #64748b; } .teal { color: #0d9488; }
+    .divider { stroke: #000000; stroke-opacity: .07; }
+  }
+</style><text x="24" y="15" font-size="12"><tspan font-weight="700" fill="#a78bfa">Opus 5.5</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan font-weight="600" fill="#f0d342">High</tspan><tspan class="t1" fill="#f2f2f2" font-weight="600"> effort</tspan></text></svg><text x="340" y="497" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" font-size="13" fill="#9a9aa0">Stop</text><svg x="32" y="502" width="308" height="17" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+
+  .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
+  .divider { stroke: #ffffff; stroke-opacity: .07; }
+  @media (prefers-color-scheme: light) {
+    .violet { color: #7c3aed; } .slate { color: #64748b; } .teal { color: #0d9488; }
+    .divider { stroke: #000000; stroke-opacity: .07; }
+  }
+</style><text x="24" y="13" font-size="11"><tspan class="t1" fill="#f2f2f2" font-weight="600">▸ Grep</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan class="t1" fill="#f2f2f2" font-weight="600">9</tspan><tspan class="t3" fill="#6e6e74"> steps</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan class="t1" fill="#f2f2f2" font-weight="600">14k</tspan><tspan class="t3" fill="#6e6e74"> tokens</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan font-weight="700" fill="#facc15">≈ $0.214</tspan></text></svg><svg x="32" y="527" width="308" height="30" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+
+  .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
+  .divider { stroke: #ffffff; stroke-opacity: .07; }
+  @media (prefers-color-scheme: light) {
+    .violet { color: #7c3aed; } .slate { color: #64748b; } .teal { color: #0d9488; }
+    .divider { stroke: #000000; stroke-opacity: .07; }
+  }
+</style><line class="divider" stroke="#ffffff" stroke-opacity=".07" x1="0" x2="100%" y1="0.5" y2="0.5"/><circle cx="8" cy="21" r="6.5" fill="none" stroke="#4ade80" stroke-opacity=".35" stroke-width="1.5"/><circle cx="8" cy="21" r="3.5" fill="#4ade80"/><text class="t1" fill="#f2f2f2" x="24" y="25" font-size="13" font-weight="600">Plan the database migration</text><text x="100%" y="25" text-anchor="end" font-size="11.5" font-weight="600" font-variant-numeric="tabular-nums" fill="#4ade80">41s</text></svg><svg x="32" y="557" width="248" height="20" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+
+  .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
+  .divider { stroke: #ffffff; stroke-opacity: .07; }
+  @media (prefers-color-scheme: light) {
+    .violet { color: #7c3aed; } .slate { color: #64748b; } .teal { color: #0d9488; }
+    .divider { stroke: #000000; stroke-opacity: .07; }
+  }
+</style><text x="24" y="15" font-size="12"><tspan font-weight="700" fill="#f87171">Fable 5.1</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan font-weight="600" fill="#f09e42">Extra high</tspan><tspan class="t1" fill="#f2f2f2" font-weight="600"> effort</tspan></text></svg><text x="340" y="572" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" font-size="13" fill="#9a9aa0">Stop</text><svg x="32" y="577" width="308" height="17" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+
+  .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
+  .divider { stroke: #ffffff; stroke-opacity: .07; }
+  @media (prefers-color-scheme: light) {
+    .violet { color: #7c3aed; } .slate { color: #64748b; } .teal { color: #0d9488; }
+    .divider { stroke: #000000; stroke-opacity: .07; }
+  }
+</style><text x="24" y="13" font-size="11"><tspan class="t1" fill="#f2f2f2" font-weight="600">▸ Read</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan class="t1" fill="#f2f2f2" font-weight="600">4</tspan><tspan class="t3" fill="#6e6e74"> steps</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan class="t1" fill="#f2f2f2" font-weight="600">6.1k</tspan><tspan class="t3" fill="#6e6e74"> tokens</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan font-weight="700" fill="#facc15">≈ $0.731</tspan></text></svg><svg x="32" y="602" width="308" height="30" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+
+  .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
+  .divider { stroke: #ffffff; stroke-opacity: .07; }
+  @media (prefers-color-scheme: light) {
+    .violet { color: #7c3aed; } .slate { color: #64748b; } .teal { color: #0d9488; }
+    .divider { stroke: #000000; stroke-opacity: .07; }
+  }
+</style><line class="divider" stroke="#ffffff" stroke-opacity=".07" x1="0" x2="100%" y1="0.5" y2="0.5"/><circle cx="8" cy="21" r="7" fill="#ffffff" fill-opacity=".07"/><path d="M5 21.2 l2.1 2.2 l4 -4.4" fill="none" stroke="#9a9aa0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><text class="t2" fill="#9a9aa0" x="24" y="25" font-size="13" font-weight="600">Explore the paym…</text><text x="100%" y="25" text-anchor="end" font-size="11.5" font-weight="600" font-variant-numeric="tabular-nums" fill="#6e6e74">Done · 1m 12s</text></svg><svg x="32" y="632" width="308" height="20" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+
+  .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
+  .divider { stroke: #ffffff; stroke-opacity: .07; }
+  @media (prefers-color-scheme: light) {
+    .violet { color: #7c3aed; } .slate { color: #64748b; } .teal { color: #0d9488; }
+    .divider { stroke: #000000; stroke-opacity: .07; }
+  }
+</style><text x="24" y="15" font-size="12"><tspan font-weight="700" fill="#2dd4bf" fill-opacity=".65">Haiku 5.5</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan font-weight="600" fill="#42f082" fill-opacity=".65">Low</tspan><tspan class="t1" fill="#f2f2f2" font-weight="600" fill-opacity=".65"> effort</tspan></text></svg><svg x="32" y="652" width="308" height="17" overflow="visible"><style>
+  text { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif; }
+  .card { fill: #ffffff; fill-opacity: .035; stroke: #ffffff; stroke-opacity: .09; }
+  .track { stroke: #ffffff; stroke-opacity: .08; fill: none; }
+  .trackfill { fill: #ffffff; fill-opacity: .08; }
+  .t1 { fill: #f2f2f2; } .t2 { fill: #9a9aa0; } .t3 { fill: #6e6e74; }
+  .green { color: #4ade80; } .amber { color: #fbbf24; } .red { color: #f87171; } .blue { color: #60a5fa; }
+  .violet { color: #a78bfa; } .teal { color: #2dd4bf; } .slate { color: #9aa4b2; } .gold { color: #facc15; }
+  .up { fill: #4ade80; }
+  @media (prefers-color-scheme: light) {
+    .card { fill: #000000; fill-opacity: .025; stroke: #000000; stroke-opacity: .1; }
+    .track { stroke: #000000; stroke-opacity: .08; } .trackfill { fill: #000000; fill-opacity: .08; }
+    .t1 { fill: #1c1c1e; } .t2 { fill: #6b6b70; } .t3 { fill: #8e8e93; }
+    .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
+    .up { fill: #16a34a; }
+  }
+
+  .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
+  .divider { stroke: #ffffff; stroke-opacity: .07; }
+  @media (prefers-color-scheme: light) {
+    .violet { color: #7c3aed; } .slate { color: #64748b; } .teal { color: #0d9488; }
+    .divider { stroke: #000000; stroke-opacity: .07; }
+  }
+</style><text x="24" y="13" font-size="11" fill-opacity=".65"><tspan class="t1" fill="#f2f2f2" font-weight="600">11</tspan><tspan class="t3" fill="#6e6e74"> steps</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan class="t1" fill="#f2f2f2" font-weight="600">5.3k</tspan><tspan class="t3" fill="#6e6e74"> tokens</tspan><tspan class="t3" fill="#6e6e74">  ·  </tspan><tspan font-weight="700" fill="#facc15">≈ $0.0034</tspan></text></svg></svg>
