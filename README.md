@@ -1,104 +1,114 @@
 <div align="center">
 
+<img src="docs/logo.svg" alt="Conso logo" width="96">
+
 # Conso
 
-**The usage panel for Claude Code.**
-Limits, context, costs and live agents, in a panel right next to your conversation.
+**The usage panel for Claude Code.**<br>
+Rate limits, context, costs and live agents, right next to your conversation.
 
 [![Version](https://img.shields.io/github/v/release/PoPs9444/conso-bar?label=version&color=4ade80)](https://github.com/PoPs9444/conso-bar/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-60a5fa)](LICENSE)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#installation)
-[![Stars](https://img.shields.io/github/stars/PoPs9444/conso-bar?style=flat&color=facc15)](https://github.com/PoPs9444/conso-bar/stargazers)
+[![Languages](https://img.shields.io/badge/languages-6-a78bfa)](#languages)
 
-**Stop guessing how close you are to your limits.** Conso shows your 5-hour and weekly usage, forecasts when you will hit them, tracks what every agent costs, and lets you compact or stop work in one click.
+[Installation](#installation) · [Features](#features) · [FAQ](#faq) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
+
+<br>
 
 <img src="docs/panel.svg" alt="The Conso panel: 5-hour and weekly limits, context, cost history and running agents" width="372">
 
 </div>
 
----
+<br>
 
-## Contents
+## Why Conso
 
-- [What the panel shows](#what-the-panel-shows)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Customize the layout](#customize-the-layout)
-- [Languages](#languages)
-- [Updates](#updates)
-- [How the numbers are computed](#how-the-numbers-are-computed)
-- [Privacy](#privacy)
-- [FAQ](#faq)
-- [Uninstall](#uninstall)
-- [Development](#development)
-- [Contributing](#contributing)
+Claude Code's limits usually show up when you hit them. Conso keeps them in sight: how much of your 5-hour and weekly allowance you have used, when you will run out at your current pace, how full the context is, and what every agent is doing and costing. One glance, no command to type.
 
-## What the panel shows
+## Features
 
-| Card | Content |
+| Feature | What it does |
 | --- | --- |
-| **5-hour limit** | Percentage used, a gauge from green to red, time until the reset, and a forecast at your average pace. |
-| **Weekly limit** | The same for the week, plus the cost of the current session. |
-| **Context** | How full the context window is (tokens used / available) and a **Compact** button to compact it. |
-| **History** | Today's cost and the last 7 days, across all your sessions. |
-| **Agents** | Every agent, live: model, effort level, duration, current tool, steps, tokens and estimated cost. **Stop** ends an agent cleanly, **Clear** removes the finished ones. |
-
-Color is kept for the numbers that matter. Percentages go from green to red as they approach 100%, and each model family has its own color: Fable in red (the most expensive), Opus in violet, Sonnet in blue, Haiku in teal.
-
-In the terminal, Conso shows a compact bar above the prompt with the same figures.
+| **Limits at a glance** | Your 5-hour and weekly usage, the time until each resets, and a forecast at your average pace. |
+| **Context and Compact** | How full the context window is, and a **Compact** button that runs `/compact` for you. |
+| **Cost history** | Today's cost and the last 7 days, across all your sessions. |
+| **Live agents** | Model, effort, duration, current tool, tokens and estimated cost for every agent. **Stop** ends one cleanly. |
+| **Your language** | English, French, Spanish, German, Italian or Portuguese, picked from Claude Code's own settings. |
+| **One-click updates** | A banner when a new version is out. **Update** applies it with no restart. |
+| **Private and light** | Nothing leaves your machine, and the panel repaints only what changed. |
 
 ## Installation
 
-**Requirements:** a version of Claude Code that supports mods. The 5-hour and weekly limits are only available on a Pro or Max plan. Without a plan, the panel shows the session cost instead.
+| Requirement | Details |
+| --- | --- |
+| Claude Code | A version that supports mods |
+| Plan | Pro or Max for the 5-hour and weekly limits. Without one, the panel shows the session cost instead. |
 
-From a terminal, run these two commands:
+From a terminal, add this repository as a plugin source:
 
 ```bash
 claude plugin marketplace add PoPs9444/conso-bar
 ```
 
+Then install Conso for all your conversations:
+
 ```bash
 claude plugin install conso-bar@conso-bar --scope user
 ```
 
-The first adds this repository as a plugin source, the second installs Conso for all your conversations.
+On recent versions of Claude Code, a single command inside a session does both: `/plugin install conso-bar --marketplace PoPs9444/conso-bar`, then answer `y` and pick the **user** scope.
 
-On recent versions of Claude Code, a single command inside a session is enough:
-
-```
-/plugin install conso-bar --marketplace PoPs9444/conso-bar
-```
-
-Answer `y` to add the source, then pick the **user** scope.
-
-Then restart Claude Code. The **Conso** panel opens on the right at the start of every conversation.
+Restart Claude Code. The **Conso** panel opens on the right at the start of every conversation.
 
 ## Usage
 
+### The panel
+
+| Card | What it shows |
+| --- | --- |
+| **5-hour limit** | Percentage used on a green-to-red gauge, time until the reset, and a forecast. |
+| **Weekly limit** | The same for the week, plus the cost of the current session. |
+| **Context** | Tokens used out of the window, and the **Compact** button. |
+| **History** | Today's cost and a bar for each of the last 7 days. |
+| **Agents** | Every agent of the session, live. Running ones first. |
+
+Color is kept for the numbers that matter: percentages turn from green to red as they approach 100%, and each model family has its own color (Fable red, Opus violet, Sonnet blue, Haiku teal).
+
+In the terminal, Conso shows a compact bar above the prompt with the same figures.
+
+### Actions
+
 - **`/conso`** reopens the panel if you closed it.
-- **Compact** (Context card) runs `/compact` in the conversation, exactly as if you typed it.
-- **Stop** (next to a running agent): the agent can no longer start tools and hands back at its next step. A command that is already running finishes first, so nothing is left half done.
-- **Clear** (Agents card) removes finished agents to free up space.
+- **Compact** runs `/compact` in the conversation, exactly as if you typed it. If Claude is busy, it runs as soon as the reply ends.
+- **Stop**, next to a running agent, ends it cleanly: it can no longer start tools and hands back at its next step. A command already running finishes first, so nothing is left half done.
+- **Clear** removes finished agents to free up space.
 
-## Customize the layout
+### Customize the layout
 
-Click **Customize** at the bottom of the panel: each card shows **↑** and **↓** to move it up or down. Click **Done** at the top of the panel when you are finished. Your order is remembered in every conversation.
+Click **Customize** at the bottom of the panel: each card shows **↑** and **↓** to move it. Click **Done** at the top when you are finished. Your order is remembered in every conversation.
 
 ## Languages
 
-Conso speaks **English**, **French**, **Spanish**, **German**, **Italian** and **Portuguese**, and follows Claude Code on its own, with nothing to set:
+Conso follows Claude Code, with nothing to set:
 
 1. your Claude Code `language` setting, if you set one;
 2. otherwise, the language of the Claude app (Settings › Language);
 3. otherwise, or for a language Conso does not speak yet, English.
 
+| English | French | Spanish | German | Italian | Portuguese |
+| :---: | :---: | :---: | :---: | :---: | :---: |
+| ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+Missing yours? [Adding a language](CONTRIBUTING.md#adding-a-language) takes one file.
+
 ## Updates
 
 <img src="docs/update.svg" alt="The &quot;New version&quot; banner with its Update button" width="372">
 
-Conso checks this repository for a newer version a few seconds after a session starts, then every 6 hours. When there is one, a banner appears at the top of the panel. **Update** runs Claude Code's official commands to download the new version, then reloads the plugins: the new version is live right away, no restart needed.
+A few seconds after a session starts, then every 6 hours, Conso checks this repository for a newer version. When there is one, a banner appears at the top of the panel, and **Update** installs it with Claude Code's own commands, then reloads the plugins: the new version is live right away.
 
-The bottom of the panel shows your installed version with a status dot (green: up to date, blue: a new version, red: the check failed) and a permanent **Check for updates** button, which tells you right away whether you are up to date, or why the check failed.
+The bottom of the panel shows your version with a status dot (green: up to date, blue: new version, red: the check failed) and a permanent **Check for updates** button.
 
 To update by hand:
 
@@ -113,29 +123,47 @@ claude plugin update conso-bar@conso-bar
 ## How the numbers are computed
 
 - **Limits** come from Claude Code, which receives them with every model reply, rounded to whole percentages. A new conversation shows the last known reading right away, and every session reads it again each minute.
-- **Forecast** uses your average pace since the window started, nights and breaks included ("≈ 65% at reset" or "100% in ≈ 1d 22h"). A burst of activity does not make it run away. It appears after 30 minutes for the 5-hour limit and after 24 hours for the weekly limit.
-- **Session cost and history** use the total Claude Code computes at public API prices, the same as `/cost`. On a subscription this is not what you pay: it is what the same usage would cost pay-as-you-go.
-- **Agent cost** is an estimate from the agent's tokens and each model's public prices ([`hooks/pricing.ts`](hooks/pricing.ts)).
+- **Forecast** uses your average pace since the window started, nights and breaks included, so a burst of activity does not make it run away. It appears after 30 minutes for the 5-hour limit and after 24 hours for the weekly one.
+- **Session cost and history** use the total Claude Code computes at public API prices, the same figure as `/cost`. On a subscription this is not what you pay: it is what the same usage would cost pay-as-you-go.
+- **Agent cost** is an estimate from each agent's tokens and the models' public prices, listed in [`hooks/pricing.ts`](hooks/pricing.ts).
 
 ## Privacy
 
-Conso sends nothing anywhere. Everything is computed and stored on your machine. Its only network request reads the version number published in this repository, to offer updates.
+Conso sends nothing anywhere: everything is computed and stored on your machine. Its only network request reads the version number published in this repository, to offer updates.
 
-To pick its language, Conso reads Claude Code's `language` setting and, in the desktop app, the single `locale` key of the Claude app's settings file (extracted with the system's own `plutil` on macOS or PowerShell on Windows, so nothing else in that file ever reaches Conso).
+To pick its language, it reads Claude Code's `language` setting and, in the desktop app, the single `locale` key of the Claude app's settings file, extracted with the system's own `plutil` (macOS) or PowerShell (Windows), so nothing else in that file ever reaches Conso.
 
 ## FAQ
 
-**Why do the limits have no decimals?**
+<details>
+<summary><b>Why do the limits have no decimals?</b></summary>
+<br>
 Claude Code reports them rounded to whole percentages. Showing a decimal would mean making it up.
+</details>
 
-**The percentage does not move when I am not typing.**
+<details>
+<summary><b>The percentage does not move when I am not typing.</b></summary>
+<br>
 Limits are only known when the model replies. Without a message, no session receives a new reading.
+</details>
 
-**Does Conso slow Claude Code down?**
+<details>
+<summary><b>Does Conso slow Claude Code down?</b></summary>
+<br>
 No. The conversation's replies never pass through Conso: it only follows agents' steps. It writes only when a figure changes, and when nothing moved it hands the app the very same drawing, so nothing is repainted.
+</details>
 
-**The panel does not appear.**
-Check that the plugin is enabled with `claude plugin list`, restart Claude Code, then type `/conso`.
+<details>
+<summary><b>The panel does not appear.</b></summary>
+<br>
+Check that the plugin is enabled with <code>claude plugin list</code>, restart Claude Code, then type <code>/conso</code>.
+</details>
+
+<details>
+<summary><b>The panel is in the wrong language.</b></summary>
+<br>
+Conso uses your Claude Code <code>language</code> setting first. Set it to the language you want, or remove it to follow the Claude app's language.
+</details>
 
 ## Uninstall
 
@@ -143,17 +171,9 @@ Check that the plugin is enabled with `claude plugin list`, restart Claude Code,
 claude plugin uninstall conso-bar@conso-bar
 ```
 
-## Development
+## Contributing
 
-```
-.claude-plugin/   plugin and marketplace manifests
-hooks/            the code: register.tsx (events and panel), dashboard.ts and agents.ts (drawings), i18n.ts (languages), pricing.ts (prices)
-types/            the contract for the values the mod keeps
-tests/            the tests
-docs/             the images in this README, drawn with the mod's own code
-```
-
-Validate and test:
+Bug reports, ideas, translations and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the setup, the design rules and how to add a language. In short:
 
 ```bash
 claude plugin validate .
@@ -163,14 +183,8 @@ claude plugin validate .
 claude plugin test .
 ```
 
-To release a version, bump `version` in `.claude-plugin/plugin.json` **and** the `VERSION` constant in `hooks/register.tsx`, then push to `main`. The update banner will show up for everyone.
-
-## Contributing
-
-Issues and pull requests are welcome. Please run `claude plugin validate .` and `claude plugin test .` before opening a pull request.
-
-If Conso saves you a surprise rate limit, a ⭐ on the repository helps others find it.
+If Conso saves you from a surprise rate limit, a ⭐ helps others find it.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Conso is an independent project, not affiliated with or endorsed by Anthropic.
