@@ -1,5 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
+import { VERSION } from '../hooks/register'
+
 const USAGE = {
   startedAt: 0,
   context: { tokens: 107_000, window: 1_000_000, percent: 11 },
@@ -90,6 +92,8 @@ test('the button runs /compact in the conversation', async ($, on) => {
     surface: 'desktop',
   } as never)
   await ui.press({ key: 'compact' })
+  // Started on a timer, so the press itself returns at once
+  await clock.advance(0)
   expect(compacted).toBe(1)
   await ui.unmount()
 })
@@ -125,7 +129,7 @@ test('the history counts the day\'s cost', async ($, on) => {
   const ui = await $.ui.mount(PANE)
   const svgs = await ui.findAll({ type: 'Svg' })
   const hist = svgs.find(x => String(x.props.alt).startsWith('History'))
-  expect(hist?.props.alt).toBe('History: today $1.23, 7 days $1.23')
+  expect(hist?.props.alt).toBe('History: Today $1.23, 7 days $1.23')
   await ui.unmount()
 })
 
@@ -191,7 +195,7 @@ test('an internal engine task does not show up in Agents', async ($, on) => {
   }
   const ui = await $.ui.mount(PANE)
   const svgs = await ui.findAll({ type: 'Svg' })
-  expect(svgs.some(x => x.props.alt === 'No agents')).toBe(true)
+  expect(svgs.some(x => x.props.alt === 'No agents in this session yet')).toBe(true)
   await ui.unmount()
 })
 
@@ -255,12 +259,14 @@ test('Check for updates says up to date, or why it failed', async ($, on) => {
   await ui.press({ key: 'check-updates' })
   await ui.unmount()
   ui = await $.ui.mount(PANE)
-  expect((await ui.findAll({ type: 'Text' })).some(t => t.text.endsWith('· Up to date'))).toBe(true)
+  const footer = async () =>
+    String((await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt)).find(a => a.startsWith(`v${VERSION}`)))
+  expect(await footer()).toBe('v' + VERSION + ' · Up to date')
   reply = { ok: false, status: 503, text: '' }
   await ui.press({ key: 'check-updates' })
   await ui.unmount()
   ui = await $.ui.mount(PANE)
-  expect((await ui.findAll({ type: 'Text' })).some(t => t.text.endsWith('· Update check failed: GitHub answered 503'))).toBe(true)
+  expect(await footer()).toBe('v' + VERSION + ' · Update check failed: GitHub answered 503')
   await ui.unmount()
 })
 
@@ -287,4 +293,118 @@ test('Update installs the new version, then reloads the plugins', async ($, on) 
     ['claude', 'plugin', 'update', 'conso-bar@conso-bar'],
   ])
   expect(commands).toContain('reload-plugins')
+})
+
+// ---- Language: English by default, Claude Code's language when it is set
+
+const mountIn = async ($: any, on: any, opts: { setting?: string; locale?: string; os?: 'mac' | 'windows' }) => {
+  // A read of one key is the read of the whole settings, projected
+  on('settings.read', () => ({ value: opts.setting === undefined ? {} : { language: opts.setting } }))
+  on('env.get', (_: unknown, e: { name: string }) => ({
+    value: e.name === 'HOME' ? '/Users/someone' : e.name === 'APPDATA' && opts.os === 'windows' ? 'C:\\Users\\someone\\AppData\\Roaming' : undefined,
+  }))
+  on('fs.exists', () => ({ value: opts.locale !== undefined }))
+  on('process.run', (_: unknown, e: { argv: string[] }) => {
+    const reads = opts.os === 'windows' ? e.argv[0] === 'powershell' : e.argv[0] === 'plutil'
+    return { value: reads && opts.locale !== undefined ? { exitCode: 0, stdout: `${opts.locale}\n`, stderr: '' } : { exitCode: 1, stdout: '', stderr: '' } }
+  })
+  await setup($, on)
+  return $.ui.mount(PANE)
+}
+
+test('English when nothing says otherwise', async ($, on) => {
+  const ui = await mountIn($, on, {})
+  expect((await ui.find({ key: 'compact' }))?.text).toBe('Compact')
+  await ui.unmount()
+})
+
+test('the Claude app in French: the panel in French', async ($, on) => {
+  const ui = await mountIn($, on, { locale: 'fr-FR' })
+  expect((await ui.find({ key: 'compact' }))?.text).toBe('Compacter')
+  expect((await ui.find({ key: 'customize' }))?.text).toBe('Personnaliser')
+  const alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  expect(alts).toContain('Limite 5 h: 42%, 100% dans ≈ 2h 46min')
+  expect(alts).toContain("Historique: Aujourd'hui $1.23, 7 jours $1.23")
+  expect(alts).toContain('Aucun agent dans cette session')
+  await ui.unmount()
+})
+
+test('on Windows too, through the app config', async ($, on) => {
+  const ui = await mountIn($, on, { locale: 'es-ES', os: 'windows' })
+  expect((await ui.find({ key: 'compact' }))?.text).toBe('Compactar')
+  await ui.unmount()
+})
+
+test("Claude Code's language setting comes first", async ($, on) => {
+  const ui = await mountIn($, on, { setting: 'english', locale: 'fr-FR' })
+  expect((await ui.find({ key: 'compact' }))?.text).toBe('Compact')
+  await ui.unmount()
+})
+
+test('a language setting by name: Deutsch', async ($, on) => {
+  const ui = await mountIn($, on, { setting: 'Deutsch' })
+  expect((await ui.find({ key: 'compact' }))?.text).toBe('Komprimieren')
+  await ui.unmount()
+})
+
+test('a language Conso does not speak: English', async ($, on) => {
+  const ui = await mountIn($, on, { setting: 'japanese', locale: 'fr-FR' })
+  expect((await ui.find({ key: 'compact' }))?.text).toBe('Compact')
+  await ui.unmount()
+})
+
+test('agent rows in French: effort word first, level in color', async ($, on) => {
+  on('state.get', (_: unknown, e: { key: string }, next: (e: unknown) => unknown) =>
+    e.key === 'agentRuns'
+      ? { value: { value: [{ id: 'x', isLinked: true, usd: 0.012, description: 'Test', type: 'Explore', model: 'claude-opus-5-5', effort: 'high', status: 'running', startedAt: 0, steps: 2, outputTokens: 128, lastTool: 'Bash' }], version: 1 } }
+      : next(e),
+  )
+  const ui = await mountIn($, on, { locale: 'fr-FR' })
+  const alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  expect(alts).toContain('Opus 5.5, Effort élevé')
+  expect(alts).toContain('Bash, ≈ $0.012, 128 tokens, 2 étapes')
+  expect((await ui.find({ key: 'stop-x' }))?.text).toBe('Arrêter')
+  await ui.unmount()
+})
+
+// ---- Speed
+
+test('a redraw with nothing new hands the app the same drawings', async ($, on) => {
+  await setup($, on)
+  const first = await $.ui.mount(PANE)
+  const a = (await first.findAll({ type: 'Svg' })).map(x => String(x.props.source))
+  await first.unmount()
+  const second = await $.ui.mount(PANE)
+  const b = (await second.findAll({ type: 'Svg' })).map(x => String(x.props.source))
+  await second.unmount()
+  expect(b).toEqual(a)
+})
+
+test('a compaction frees the button and shows the new context size', async ($, on) => {
+  const summary = [{ role: 'user', text: 'Summary', toolUses: [] }]
+  on('session.compact', () => ({ messages: summary, tokensBefore: 807_000, tokensAfter: 42_000 }))
+  await setup($, on)
+  await ($ as any).session.compact({ trigger: 'manual', messages: summary })
+  const ui = await $.ui.mount(PANE)
+  const ctx = (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('Context:'))
+  expect(ctx?.props.alt).toBe('Context: 42k / 1M tokens, 4.2%')
+  expect((await ui.find({ key: 'compact' }))?.text).toBe('Compact')
+  await ui.unmount()
+})
+
+test("an agent's steps still reach the card", async ($, on) => {
+  on('agent.list', () => ({ value: [{ id: 'a1', name: 'Scout', description: 'Scout the repo', type: 'Explore' }] }))
+  on('turn.step', async function* () {
+    return { turnId: 't', index: 0, answer: '', toolUses: [], stopReason: 'end_turn', usage: null }
+  } as never)
+  await setup($, on)
+  const step = ($.turn as never as { step: (e: unknown) => AsyncIterable<unknown> }).step
+  for await (const _ of step({ turnId: 't', index: 0, model: 'claude-haiku-5-5', messageCount: 1, agentId: 'a1' })) {
+    // nothing
+  }
+  const ui = await $.ui.mount(PANE)
+  const alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  expect(alts.some(a => a.startsWith('Scout the repo: Haiku 5.5'))).toBe(true)
+  expect(alts.filter(a => a.includes(': Opus 5.5')).length).toBe(0)
+  await ui.unmount()
 })
