@@ -7,6 +7,7 @@
 **The usage panel for Claude Code.**<br>
 Rate limits, context, costs and live agents, right next to your conversation.
 
+[![CI](https://github.com/PoPs9444/conso-bar/actions/workflows/ci.yml/badge.svg)](https://github.com/PoPs9444/conso-bar/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/PoPs9444/conso-bar?label=version&color=4ade80)](https://github.com/PoPs9444/conso-bar/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-60a5fa)](LICENSE)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](#installation)

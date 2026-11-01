@@ -30,7 +30,7 @@ In the terminal you get the bar above the prompt. To see the panel in the deskto
 
 ## Checks
 
-Both must pass before a pull request is merged.
+Both must pass before a pull request is merged. The CI runs them on every push and pull request.
 
 ```bash
 claude plugin validate .
@@ -72,7 +72,7 @@ The panel is tuned to the pixel. A few rules keep it that way:
 
 ## Releasing
 
-1. Bump `version` in `.claude-plugin/plugin.json` **and** the `VERSION` constant in `hooks/register.tsx`: they must match.
+1. Bump `version` in `.claude-plugin/plugin.json` **and** the `VERSION` constant in `hooks/register.tsx` (the CI checks that they match).
 2. Add the version to [CHANGELOG.md](CHANGELOG.md).
 3. Push to `main`, then create a GitHub release named `Conso vX.Y.Z` with the tag `vX.Y.Z`. Every installed copy shows the update banner within 6 hours.
 
