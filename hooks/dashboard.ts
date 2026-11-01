@@ -192,11 +192,12 @@ const limitCard = (name: string, l: Limit, now: number, usd?: number) => {
       H,
       ring(cx, cy, 26, p, color) +
         `<text x="${cx}" y="${cy + 5}" text-anchor="middle" font-size="14.5" font-weight="700" fill="${color}">${esc(pct(p))}</text>` +
-        title(tx, ty, name.toUpperCase()) +
+        // The title fades out before the reset time; the lines below fade at the edge
+      fadeRight(H, reset ? Math.ceil(reset.length * 7.2) + 10 : 0, title(tx, ty, name.toUpperCase())) +
         (reset
           ? `<text class="t2" x="100%" y="${ty}" text-anchor="end" font-size="12" font-weight="600" font-variant-numeric="tabular-nums">${esc(reset)}</text>`
           : '') +
-        body,
+        fadeRight(H, 0, body),
     ),
   }
 }
@@ -223,11 +224,15 @@ export const historyCard = (days: readonly Day[]) => {
   })
   const svg = fluid(
     H,
-    title(0, 11, 'HISTORY') +
-      `<text class="t3" x="0" y="33" font-size="11">Today</text>` +
-      `<text x="0" y="57" font-size="21" font-weight="700" fill="${HEX.gold}">${esc(dollars(today.usd))}</text>` +
-      `<text x="0" y="76" font-size="11"><tspan class="t3">7 days  </tspan><tspan class="t1" font-weight="700">${esc(dollars(week))}</tspan></text>` +
-      right(bars),
+    // The figures fade out before the bars when the panel gets narrow
+    fadeRight(
+      H,
+      -x0 + 10,
+      title(0, 11, 'HISTORY') +
+        `<text class="t3" x="0" y="33" font-size="11">Today</text>` +
+        `<text x="0" y="57" font-size="21" font-weight="700" fill="${HEX.gold}">${esc(dollars(today.usd))}</text>` +
+        `<text x="0" y="76" font-size="11"><tspan class="t3">7 days  </tspan><tspan class="t1" font-weight="700">${esc(dollars(week))}</tspan></text>`,
+    ) + right(bars),
   )
   return { svg, h: H, alt: `History: today ${dollars(today.usd)}, 7 days ${dollars(week)}` }
 }
@@ -262,9 +267,10 @@ export const contextCard = (s: Snapshot) => {
   const H = 44
   const cp = (s.tokens / s.window) * 100
   const color = heat(cp)
+  const tokenLabel = `${tokens(s.tokens)} / ${tokens(s.window)} tokens`
   const svg = fluid(
     H,
-    `<text x="0" y="24" font-size="22" font-weight="700" fill="${color}">${esc(num(cp, 1))}%</text>` +
+    fadeRight(32, Math.ceil(tokenLabel.length * 6.6) + 10, `<text x="0" y="24" font-size="22" font-weight="700" fill="${color}">${esc(num(cp, 1))}%</text>`) +
       `<text x="100%" y="24" text-anchor="end" font-size="11.5"><tspan font-weight="700" fill="${color}">${esc(tokens(s.tokens))}</tspan><tspan class="t2"> / ${esc(tokens(s.window))}</tspan><tspan class="t3"> tokens</tspan></text>` +
       bar(36, cp, color),
   )

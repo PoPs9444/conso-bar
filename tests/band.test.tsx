@@ -255,12 +255,12 @@ test('Check for updates says up to date, or why it failed', async ($, on) => {
   await ui.press({ key: 'check-updates' })
   await ui.unmount()
   ui = await $.ui.mount(PANE)
-  expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toContain('Up to date')
+  expect((await ui.findAll({ type: 'Text' })).some(t => t.text.endsWith('· Up to date'))).toBe(true)
   reply = { ok: false, status: 503, text: '' }
   await ui.press({ key: 'check-updates' })
   await ui.unmount()
   ui = await $.ui.mount(PANE)
-  expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toContain('Update check failed: GitHub answered 503')
+  expect((await ui.findAll({ type: 'Text' })).some(t => t.text.endsWith('· Update check failed: GitHub answered 503'))).toBe(true)
   await ui.unmount()
 })
 

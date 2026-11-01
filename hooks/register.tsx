@@ -11,7 +11,7 @@ import { costOf } from './pricing'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.21.0'
+export const VERSION = '0.21.1'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
@@ -419,10 +419,7 @@ export const register: Register = on => {
     const line = updateLine(upd)
     const footer = (
       <els.Box key="footer" flexDirection="column">
-        <els.Box flexDirection="row" alignItems="center">
-          <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
-            <els.Text dimColor>v{VERSION}</els.Text>
-          </els.Box>
+        <els.Box flexDirection="row" flexWrap="wrap" justifyContent="flex-end" columnGap={2}>
           <els.Button key="check-updates" plain dimColor onPress={() => checkUpdate($, true)}>
             {upd.status === 'checking' ? 'Checking…' : 'Check for updates'}
           </els.Button>
@@ -432,7 +429,9 @@ export const register: Register = on => {
             </els.Button>
           )}
         </els.Box>
-        {line ? <els.Text dimColor>{line}</els.Text> : null}
+        {/* The version and the last check's result on a line of their own, so
+            nothing overlaps however narrow the panel gets */}
+        <els.Text dimColor>{line ? `v${VERSION} · ${line}` : `v${VERSION}`}</els.Text>
       </els.Box>
     )
 
