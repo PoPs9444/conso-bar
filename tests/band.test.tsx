@@ -527,8 +527,9 @@ Pages occupied by compressor:                 899298.
 16
 `
 
-// The processes and the GPU's clients that follow it; `gpu` is Claude's GPU time
-const macOut = (gpu: number) => `${MAC_OUT}@@
+// The processes and the GPU's clients that follow it; `gpu` is the GPU time of
+// Claude's client, `claudeClient` that client's registry id
+const macOut = (gpu: number, claudeClient = '0x1001') => `${MAC_OUT}@@
   101  64.0  2097152 /Applications/Claude.app/Contents/MacOS/Claude
   102  32.0  1048576 /Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)
   103  16.0   524288 /Users/someone/Library/Application Support/Claude/claude-code/2.1.316/claude.app/Contents/MacOS/claude
@@ -536,10 +537,10 @@ const macOut = (gpu: number) => `${MAC_OUT}@@
   301   8.0  1048576 /System/Library/CoreServices/WindowServer
   302   1.6   262144 /usr/libexec/logd
 @@
-+-o AGXDeviceUserClient
++-o AGXDeviceUserClient  <class AGXDeviceUserClient, id ${claudeClient}
 "accumulatedGPUTime"=${gpu}
 "IOUserClientCreator" = "pid 101
-+-o AGXDeviceUserClient
++-o AGXDeviceUserClient  <class AGXDeviceUserClient, id 0x1002
 "accumulatedGPUTime"=1000
 "IOUserClientCreator" = "pid 301
 `
@@ -554,7 +555,7 @@ test('macOS: CPU, GPU and memory as Activity Monitor counts it', () => {
   expect(s.cores).toBe(16)
   expect(procs.map(p => p.app)).toEqual(['Claude', 'Claude', 'claude', 'Google Chrome', 'macOS', 'macOS'])
   expect(procs[0]!.ram).toBe(2)
-  expect(gpuTimes?.get('101')).toBe(5000)
+  expect(gpuTimes?.get('0x1001')).toEqual({ pid: '101', time: 5000 })
 })
 
 test('a process belongs to its outermost app, the system\'s own to macOS', () => {
@@ -564,10 +565,17 @@ test('a process belongs to its outermost app, the system\'s own to macOS', () =>
   expect(appOf('kernel_task')).toBe('kernel_task')
 })
 
-test('the GPU\'s clients add up per process', () => {
-  const times = parseGpuClients('+-o AGXDeviceUserClient\n"accumulatedGPUTime"=10\n"IOUserClientCreator" = "pid 7\n+-o AGXDeviceUserClient\n"accumulatedGPUTime"=5\n"IOUserClientCreator" = "pid 7\n+-o AGXDeviceUserClient\n"accumulatedGPUTime"=3\n')
-  expect(times.get('7')).toBe(15)
-  expect(times.size).toBe(1)
+test('the GPU\'s clients are read one by one', () => {
+  const head = (id: string) => `+-o AGXDeviceUserClient  <class AGXDeviceUserClient, id ${id}\n`
+  const clients = parseGpuClients(
+    `${head('0xa')}"accumulatedGPUTime"=10\n"accumulatedGPUTime"=2\n"IOUserClientCreator" = "pid 7\n` +
+      `${head('0xb')}"accumulatedGPUTime"=5\n"IOUserClientCreator" = "pid 7\n${head('0xc')}"accumulatedGPUTime"=3\n`,
+  )
+  // Client by client, never one total per process; one with no process is left out
+  expect([...clients]).toEqual([
+    ['0xa', { pid: '7', time: 12 }],
+    ['0xb', { pid: '7', time: 5 }],
+  ])
 })
 
 test('the top apps: one per app, in percent of the machine, never above its total', () => {
@@ -654,14 +662,48 @@ test('the System card comes first, with each app\'s share of the machine', async
   // First, by default
   expect(alts.findIndex(a => a.startsWith('System'))).toBeLessThan(alts.findIndex(a => a.startsWith('5-hour')))
   await ui.unmount()
-  // 0.9 s of GPU time in the 4.5 s since: Claude used 20% of the GPU
-  gpu += 0.9e9
-  await clock.advance(4500)
+  // The next reading comes as soon as the GPU can be measured: 0.52 s of GPU
+  // time in the 2.6 s since, so Claude used 20% of the GPU, and so did the machine
+  gpu += 0.52e9
+  await clock.advance(2600)
   ui = await $.ui.mount(PANE)
   alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  expect(card()).toContain('System: CPU 25%, GPU 20%')
   expect(card()).toContain('Claude: CPU 7%, GPU 20%, RAM 3.5 GB')
   expect(card()).toContain('macOS: CPU 1%, GPU 0%')
   await ui.unmount()
+})
+
+test('the GPU never drops to 0% for want of a measure, and its column stays', async ($, on) => {
+  let gpu = 1e9
+  let client = '0x1001'
+  on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'HOME' ? '/Users/someone' : undefined }))
+  on('fs.exists', () => ({ value: false }))
+  on('process.run', (_: unknown, e: { argv: string[] }) =>
+    ({ value: e.argv[0] === 'sh' ? { exitCode: 0, stdout: macOut(gpu, client), stderr: '' } : { exitCode: 1, stdout: '', stderr: '' } }),
+  )
+  await setup($, on)
+  await clock.advance(500)
+  gpu += 0.52e9
+  await clock.advance(2600)
+  const card = async () => {
+    const ui = await $.ui.mount(PANE)
+    const alt = String((await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt)).find(a => a.startsWith('System:')))
+    await ui.unmount()
+    return alt
+  }
+  expect(await card()).toContain('Claude: CPU 7%, GPU 20%')
+  // Claude closes its GPU client and opens another, which has drawn 0.38 s
+  client = '0x1003'
+  gpu = 0.38e9
+  // The regular reading 1.9 s later is too soon to measure: the last figures stay
+  await clock.advance(1900)
+  expect(await card()).toContain('System: CPU 25%, GPU 20%')
+  expect(await card()).toContain('Claude: CPU 7%, GPU 20%')
+  // The next one measures over the 6.9 s since: Claude's share is its new
+  // client's 0.38 s, not a drop to 0% for the client it closed
+  await clock.advance(5000)
+  expect(await card()).toContain('Claude: CPU 7%, GPU 6%')
 })
 
 test('CPU, GPU or RAM ranks the apps by that column; picked again, by all three', async ($, on) => {
@@ -671,7 +713,8 @@ test('CPU, GPU or RAM ranks the apps by that column; picked again, by all three'
   let ui = await $.ui.mount(PANE)
   const svg = async () => (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('System:'))
   const order = async () => String((await svg())?.props.alt).split('. ')[1]!.split('; ').map(x => x.split(':')[0])
-  const dots = async () => [...String((await svg())?.props.source).matchAll(/<circle cx="4" cy="[\d.]+" r="3.5" fill="(#[0-9a-f]{6})"/g)].map(m => m[1])
+  const names = async () => (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.source).includes('<circle cx="4"'))
+  const dots = async () => [...String((await names())?.props.source).matchAll(/<circle cx="4" cy="[\d.]+" r="3.5" fill="(#[0-9a-f]{6})"/g)].map(m => m[1])
   expect(await order()).toEqual(['Claude', 'Google Chrome', 'macOS'])
   expect((await ui.find({ key: 'sort-ram' }))?.text).toBe('RAM')
   await ui.press({ key: 'sort-ram' })
@@ -679,7 +722,9 @@ test('CPU, GPU or RAM ranks the apps by that column; picked again, by all three'
   await ui.unmount()
   ui = await $.ui.mount(PANE)
   expect(await order()).toEqual(['Google Chrome', 'Claude', 'macOS'])
-  expect(String((await svg())?.props.source)).toContain('▾ RAM')
+  // The header itself is the button, marked on the column picked
+  expect((await ui.find({ key: 'sort-ram' }))?.text).toBe('RAM ▾')
+  expect((await ui.find({ key: 'sort-cpu' }))?.text).toBe('CPU')
   // Each app keeps its color: Chrome stays violet though it now comes first
   expect(await dots()).toEqual(['#a78bfa', '#60a5fa', '#f472b6', '#7c7c84'])
   await ui.press({ key: 'sort-ram' })

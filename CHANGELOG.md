@@ -2,6 +2,16 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.26.1] - 2026-11-02
+
+### Changed
+- **Sort from the table itself.** The CPU, GPU and RAM headers right above the apps are the buttons that rank them; the row beside the title is gone.
+
+### Fixed
+- **The GPU no longer drops to 0% at random.** It is now the average over the seconds between two readings, from each GPU client's own time, instead of the driver's instant figure, which reads 0% between two frames of an app drawing in bursts.
+- **An app's GPU share no longer falls to 0%** when it closes one of its GPU clients: time is compared client by client.
+- **The GPU column no longer disappears.** A reading too close to the last one, or the first one after a reload, keeps the last figures, and the second reading comes as soon as the GPU can be measured.
+
 ## [0.26.0] - 2026-11-02
 
 ### Added

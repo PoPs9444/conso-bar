@@ -69,7 +69,7 @@ Restart Claude Code. The **Conso** panel opens on the right at the start of ever
 
 | Card | What it shows |
 | --- | --- |
-| **System** | Three rings for CPU, GPU and memory in use, each cut into a colored quarter per app, and a table of the four apps using the most with their share of each. **CPU**, **GPU** and **RAM** next to the title rank them by that column. |
+| **System** | Three rings for CPU, GPU and memory in use, each cut into a colored quarter per app, and a table of the four apps using the most with their share of each. Click its **CPU**, **GPU** or **RAM** header to rank them by that column. |
 | **Limits** | Your 5-hour and weekly usage in one card: a green-to-red ring for each, the time until it resets, a forecast, and the session cost. |
 | **Context** | Percentage and tokens used out of the window, a green-to-red gradient bar, and the **Compact** button. |
 | **History** | Today's cost, the last 7 days' total, and a small bar per day, from green for a light day to red for the heaviest. |
@@ -160,13 +160,13 @@ No. The conversation's replies never pass through Conso: it only follows agents'
 <details>
 <summary><b>Why is there no GPU figure?</b></summary>
 <br>
-On macOS, Conso reads the GPU's own utilization (Apple silicon and most Intel Macs). On Linux, it needs an NVIDIA card with <code>nvidia-smi</code>. On Windows, it reads the 3D engines' load. Where none of these is available, the gauge shows n/a.
+On macOS, Conso measures the GPU over the seconds between two readings, from the time each app spent on it (Apple silicon), so a game drawing in bursts never reads 0% by chance. On Linux, it needs an NVIDIA card with <code>nvidia-smi</code>. On Windows, it reads the 3D engines' load. Where none of these is available, the gauge shows n/a.
 </details>
 
 <details>
 <summary><b>Which apps does the System card list?</b></summary>
 <br>
-The four using the most CPU, GPU and memory together, the rest grouped as Other. Click **CPU**, **GPU** or **RAM** next to the card's title to list the four using the most of that one instead; click it again to go back. An app's helper processes count as the app, and the system's own processes as macOS. On macOS, every column is filled. On Linux and Windows, the system does not give a reliable load per app, so apps are ranked and shown by memory.
+The four using the most CPU, GPU and memory together, the rest grouped as Other. Click the table's **CPU**, **GPU** or **RAM** header to list the four using the most of that one instead; click it again to go back. An app's helper processes count as the app, and the system's own processes as macOS. On macOS, every column is filled. On Linux and Windows, the system does not give a reliable load per app, so apps are ranked and shown by memory.
 </details>
 
 <details>
