@@ -1,4 +1,4 @@
-import type { Day, Limit, Snapshot } from '../types'
+import type { Day, Limit, Snapshot, SystemStats } from '../types'
 
 import type { Strings } from './i18n'
 
@@ -279,6 +279,42 @@ export const limitCards = (s: Snapshot, now: number, t: Strings) => {
     })
   }
   return cards
+}
+
+// The machine's load: three gauges side by side (CPU, GPU, memory), each centered
+// in its third of the card, with its figure inside and a detail underneath
+export const systemCard = (sys: SystemStats, t: Strings) => {
+  const H = 112
+  // 50.8, 64, 128: a tenth only where there is one
+  const gb = (n: number) => (n >= 100 ? String(Math.round(n)) : String(Math.round(n * 10) / 10))
+  const ramPct = sys.ramUsed !== undefined && sys.ramTotal ? (sys.ramUsed / sys.ramTotal) * 100 : undefined
+  const gauge = (x: string, label: string, p: number | undefined, detail: string) => {
+    const color = p === undefined ? '#6e6e74' : heat(p)
+    return (
+      `<svg x="${x}" y="0" width="1" height="1" overflow="visible">` +
+      ring(0, 52, 24, p ?? 0, color) +
+      `<text x="0" y="57" text-anchor="middle" font-size="13.5" font-weight="700" fill="${color}">${p === undefined ? '—' : esc(pct(p))}</text>` +
+      `<text class="t2" x="0" y="96" text-anchor="middle" font-size="11" font-weight="600" letter-spacing=".7">${esc(label)}</text>` +
+      `<text x="0" y="110" text-anchor="middle" font-size="10.5">${detail}</text>` +
+      `</svg>`
+    )
+  }
+  const cpuDetail = `<tspan class="t3">${esc(sys.cores ? t.cores(sys.cores) : '')}</tspan>`
+  const gpuDetail = `<tspan class="t3">${esc(sys.gpu === undefined ? t.na : (sys.gpuName ?? ''))}</tspan>`
+  const ramDetail =
+    sys.ramUsed !== undefined && sys.ramTotal
+      ? `<tspan class="t1" font-weight="700">${esc(String(gb(sys.ramUsed)))}</tspan><tspan class="t3"> / ${esc(String(gb(sys.ramTotal)))} ${esc(t.gb)}</tspan>`
+      : `<tspan class="t3">${esc(t.na)}</tspan>`
+  const svg = fluid(
+    H,
+    title(0, 11, t.system.toUpperCase()) +
+      gauge('16.67%', 'CPU', sys.cpu, cpuDetail) +
+      gauge('50%', 'GPU', sys.gpu, gpuDetail) +
+      gauge('83.33%', 'RAM', ramPct, ramDetail),
+  )
+  const figure = (p: number | undefined) => (p === undefined ? t.na : pct(p))
+  const ram = sys.ramUsed !== undefined && sys.ramTotal ? `${gb(sys.ramUsed)} / ${gb(sys.ramTotal)} ${t.gb}` : t.na
+  return { svg, h: H, alt: `${t.system}: CPU ${figure(sys.cpu)}, GPU ${figure(sys.gpu)}, RAM ${ram}` }
 }
 
 // Context card content (the title and the Compact button sit above it)

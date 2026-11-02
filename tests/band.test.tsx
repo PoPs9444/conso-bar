@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { VERSION } from '../hooks/register'
+import { parseLinux, parseMac, parseWindows } from '../hooks/system'
 
 const USAGE = {
   startedAt: 0,
@@ -433,4 +434,100 @@ test('history bars go from green to red with what each day cost', async ($, on) 
   expect(fills[4]).toBe('#f04242')
   expect(fills[5]).toBe('#42f067')
   await ui.unmount()
+})
+
+// ---- System: CPU, GPU and memory
+
+// What the macOS command prints on an Apple M4 Max (trimmed)
+const MAC_OUT = ` 18  7 75  10.27 17.75 15.56
+@@
+"Device Utilization %"=26
+"model" = "Apple M4 Max"
+@@
+Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages active:                                1395742.
+Pages wired down:                             389218.
+Pages purgeable:                               26294.
+Anonymous pages:                             2069093.
+Pages occupied by compressor:                 899298.
+@@
+68719476736
+16
+`
+
+test('macOS: CPU, GPU and memory as Activity Monitor counts it', () => {
+  const s = parseMac(MAC_OUT)
+  expect(s.cpu).toBe(25)
+  expect(s.gpu).toBe(26)
+  expect(s.gpuName).toBe('M4 Max')
+  expect(Math.round(s.ramUsed! * 10) / 10).toBe(50.8)
+  expect(s.ramTotal).toBe(64)
+  expect(s.cores).toBe(16)
+})
+
+test('Linux: CPU from two samples, memory from MemAvailable, an NVIDIA GPU', () => {
+  const s = parseLinux(`cpu  100 0 100 800 0 0 0 0 0 0
+cpu  160 0 140 900 0 0 0 0 0 0
+@@
+MemTotal:       16384000 kB
+MemAvailable:    4096000 kB
+@@
+8
+@@
+37, NVIDIA GeForce RTX 4070
+`)
+  // 100 busy ticks out of 200
+  expect(s.cpu).toBe(50)
+  expect(s.gpu).toBe(37)
+  expect(s.gpuName).toBe('GeForce RTX 4070')
+  expect(Math.round(s.ramUsed! * 10) / 10).toBe(11.7)
+  expect(s.cores).toBe(8)
+})
+
+test('Linux without a GPU tool: no GPU figure', () => {
+  const s = parseLinux('cpu 1 0 1 8 0 0 0 0\ncpu 2 0 2 9 0 0 0 0\n@@\nMemTotal: 1000 kB\nMemAvailable: 500 kB\n@@\n4\n@@\n')
+  expect(s.gpu).toBe(undefined)
+})
+
+test('Windows: load, memory and the 3D engines', () => {
+  const s = parseWindows('12|16777216|8388608|12|33.5\r\n')
+  expect(s.cpu).toBe(12)
+  expect(s.gpu).toBe(33.5)
+  expect(s.ramUsed).toBe(8)
+  expect(s.ramTotal).toBe(16)
+})
+
+test('the System card shows CPU, GPU and memory', async ($, on) => {
+  on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'HOME' ? '/Users/someone' : undefined }))
+  on('fs.exists', () => ({ value: false }))
+  on('process.run', (_: unknown, e: { argv: string[] }) =>
+    ({ value: e.argv[0] === 'sh' ? { exitCode: 0, stdout: MAC_OUT, stderr: '' } : { exitCode: 1, stdout: '', stderr: '' } }),
+  )
+  await setup($, on)
+  await clock.advance(500)
+  const ui = await $.ui.mount(PANE)
+  const alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  expect(alts).toContain('System: CPU 25%, GPU 26%, RAM 50.8 / 64 GB')
+  // Right after Context, by default
+  const order = alts.map(a => a.split(':')[0])
+  expect(order.indexOf('System')).toBe(order.lastIndexOf('Context') + 1)
+  await ui.unmount()
+})
+
+test('an order saved before the System card gets it right after Context', async ($, on) => {
+  mock.clock(on, { now: Date.parse('2026-11-01T00:00:00Z') })
+  mock.store(on, { cardOrder: ['agents', 'context', 'limits', 'history'] })
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: USAGE }))
+  on('session.id', () => ({ value: 'session-test' }))
+  on('command.register', () => ({ value: { command: 'conso' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'customize' })
+  await ui.unmount()
+  const ui2 = await $.ui.mount(PANE)
+  const labels = (await ui2.findAll({ type: 'Text' })).map(x => x.text).filter(x => ['Limits', 'Context', 'System', 'History', 'Agents'].includes(x))
+  expect(labels).toEqual(['Agents', 'Context', 'System', 'Limits', 'History'])
+  await ui2.unmount()
 })

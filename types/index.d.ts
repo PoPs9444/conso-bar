@@ -45,7 +45,19 @@ export type UpdateState = {
 }
 
 // The panel's blocks, in the order the person chose
-export type CardKey = 'limits' | 'context' | 'history' | 'agents'
+export type CardKey = 'limits' | 'context' | 'system' | 'history' | 'agents'
+
+// The machine's load at the last reading; a figure the machine would not give
+// is absent
+export type SystemStats = {
+  cpu?: number
+  gpu?: number
+  gpuName?: string
+  // memory in use and installed, in GB (2^30 bytes, as the OS shows it)
+  ramUsed?: number
+  ramTotal?: number
+  cores?: number
+}
 
 // The languages the panel speaks; English unless Claude Code is set to another
 export type Lang = 'en' | 'fr' | 'es' | 'de' | 'it' | 'pt'
@@ -62,6 +74,7 @@ declare module 'claude-code' {
       order: CardKey[]
       isCustomizing: boolean
       lang: Lang
+      system: SystemStats | null
     }
   }
 }
