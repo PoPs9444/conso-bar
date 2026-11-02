@@ -2,6 +2,11 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.28.3] - 2026-11-02
+
+### Fixed
+- **The panel never stays blank.** If something goes wrong while the panel is drawn, it says what in one line instead of showing "Nothing to show yet", so the problem can be reported.
+
 ## [0.28.2] - 2026-11-02
 
 ### Fixed

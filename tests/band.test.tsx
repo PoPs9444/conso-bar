@@ -316,6 +316,18 @@ test('an agent recorded without a name or a model still draws, and the panel wit
   await ui.unmount()
 })
 
+test('a panel that cannot be drawn says why, and never stays blank', async ($, on) => {
+  on('state.get', (_: unknown, e: { key: string }, next: (e: unknown) => unknown) =>
+    e.key === 'update' ? { value: { value: null, version: 1 } } : next(e),
+  )
+  await setup($, on)
+  const ui = await $.ui.mount(PANE)
+  const texts = (await ui.findAll({ type: 'Text' })).map(x => String(x.text))
+  expect(texts.some(x => x.startsWith('Conso could not draw this panel: '))).toBe(true)
+  expect(texts.includes('engine')).toBe(false)
+  await ui.unmount()
+})
+
 test('a newer version on GitHub shows the update banner', async ($, on) => {
   on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
   await setup($, on)

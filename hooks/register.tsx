@@ -15,7 +15,7 @@ import type { GpuClient, Platform, Proc, Reading } from './system'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.28.2'
+export const VERSION = '0.28.3'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
@@ -607,230 +607,239 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
-    const t = await words($)
-    const s = await read($, snapshot)
-    if (s === null || !('Svg' in els)) {
-      return <els.Text dimColor>{t.waiting}</els.Text>
-    }
-
-    await read($, tick)
-    const now = await $.clock.now()
-    // A card that cannot be drawn is left out: the rest of the panel still shows
-    const safely = <T,>(draw: () => T, otherwise: T): T => {
-      try {
-        return draw()
-      } catch {
-        return otherwise
+    try {
+      const t = await words($)
+      const s = await read($, snapshot)
+      if (s === null || !('Svg' in els)) {
+        return <els.Text dimColor>{t.waiting}</els.Text>
       }
-    }
-    const limits = safely(() => limitCards(s, now, t), [])
-    const upd = await read($, updateState)
-    const banner = safely(() => updateBanner(upd, t), null)
-    const days = await read($, history)
-    const hist = safely(() => historyCard(days, t), null)
-    const ctx = safely(() => contextCard(s, t), null)
-    const stats = await read($, system)
-    const sorting = await read($, appSort)
-    const sys = stats ? safely(() => systemCard(stats, t, sorting), null) : null
-    const busy = await read($, isCompacting)
-    const runs = (await read($, agentView)) ?? (await read($, agents))
-    const ag = safely(() => agentsCard(runs, now, t), agentsCard([], now, t))
 
-    // Every button of the panel: plain, dim at rest unless told otherwise
-    const site = `${e.surface}\u0000`
-    const drawn = new Set<string>()
-    const button = (key: string, label: string, press: () => unknown, look: Pick<ButtonProps, 'dimColor' | 'hover'> = { dimColor: true }) => {
-      const id = site + key
-      const sig = JSON.stringify([label, look])
-      const was = kept.get(id)
-      const b = was?.look === sig ? was.button : <els.Button key={key} label={label} plain {...look} onPress={() => kept.get(id)?.press()} />
-      kept.set(id, { look: sig, button: b, press })
-      drawn.add(id)
-      return b
-    }
+      await read($, tick)
+      const now = await $.clock.now()
+      // A card that cannot be drawn is left out: the rest of the panel still shows
+      const safely = <T,>(draw: () => T, otherwise: T): T => {
+        try {
+          return draw()
+        } catch {
+          return otherwise
+        }
+      }
+      const limits = safely(() => limitCards(s, now, t), [])
+      const upd = await read($, updateState)
+      const banner = safely(() => updateBanner(upd, t), null)
+      const days = await read($, history)
+      const hist = safely(() => historyCard(days, t), null)
+      const ctx = safely(() => contextCard(s, t), null)
+      const stats = await read($, system)
+      const sorting = await read($, appSort)
+      const sys = stats ? safely(() => systemCard(stats, t, sorting), null) : null
+      const busy = await read($, isCompacting)
+      const runs = (await read($, agentView)) ?? (await read($, agents))
+      const ag = safely(() => agentsCard(runs, now, t), agentsCard([], now, t))
 
-    // Exactly what typing /compact does: it shows in the conversation and runs
-    // as soon as Claude is idle. Started on a timer so the press returns at
-    // once: a compaction outlasts the time a press may take
-    const compact = async () => {
-      if (await read($, isCompacting)) return
-      await update($, isCompacting, () => true)
-      $.clock.after(0, () => {
-        void $.command
-          .run({ command: 'compact' })
-          .catch((err: unknown) => $.ui.toast(t.compactFailed(err instanceof Error ? err.message : String(err))))
-          .finally(() => update($, isCompacting, () => false))
-      })
-    }
+      // Every button of the panel: plain, dim at rest unless told otherwise
+      const site = `${e.surface}\u0000`
+      const drawn = new Set<string>()
+      const button = (key: string, label: string, press: () => unknown, look: Pick<ButtonProps, 'dimColor' | 'hover'> = { dimColor: true }) => {
+        const id = site + key
+        const sig = JSON.stringify([label, look])
+        const was = kept.get(id)
+        const b = was?.look === sig ? was.button : <els.Button key={key} label={label} plain {...look} onPress={() => kept.get(id)?.press()} />
+        kept.set(id, { look: sig, button: b, press })
+        drawn.add(id)
+        return b
+      }
 
-    // Clear frees the room taken by finished agents
-    const clearFinished = () => setAgents($, list => list.filter(a => a.status === 'running'))
+      // Exactly what typing /compact does: it shows in the conversation and runs
+      // as soon as Claude is idle. Started on a timer so the press returns at
+      // once: a compaction outlasts the time a press may take
+      const compact = async () => {
+        if (await read($, isCompacting)) return
+        await update($, isCompacting, () => true)
+        $.clock.after(0, () => {
+          void $.command
+            .run({ command: 'compact' })
+            .catch((err: unknown) => $.ui.toast(t.compactFailed(err instanceof Error ? err.message : String(err))))
+            .finally(() => update($, isCompacting, () => false))
+        })
+      }
 
-    // Clean stop: no more tools or requests for this agent, it hands back at its
-    // next step (a tool already running finishes)
-    const stop = (id: string) => () => patch($, id, a => (a.status === 'running' ? { ...a, isStopping: true } : a))
+      // Clear frees the room taken by finished agents
+      const clearFinished = () => setAgents($, list => list.filter(a => a.status === 'running'))
 
-    // Every card: the same app frame, which follows the panel's width
-    const frame = (key: string, children: RenderChildren) => (
-      <els.Box
-        key={key}
-        flexDirection="column"
-        gap={1}
-        paddingX={2}
-        paddingY={1}
-        borderStyle="round"
-        borderColor="rgba(255,255,255,0.09)"
-        backgroundColor="rgba(255,255,255,0.035)"
-      >
-        {children}
-      </els.Box>
-    )
+      // Clean stop: no more tools or requests for this agent, it hands back at its
+      // next step (a tool already running finishes)
+      const stop = (id: string) => () => patch($, id, a => (a.status === 'running' ? { ...a, isStopping: true } : a))
 
-    const blocks: Record<CardKey, RenderChildren> = {
-      limits: limits.length > 0 ? limits.map(c => frame(c.key, <els.Svg source={c.svg} alt={c.alt} height={c.h} />)) : null,
-      context: ctx
-        ? frame('ctx', [
-            <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
-              <els.Svg source={ctx.title} alt={t.context} width={ctx.titleW} height={14} />
-              {button('compact', busy ? t.compacting : t.compact, compact)}
-            </els.Box>,
-            <els.Svg key="body" source={ctx.svg} alt={ctx.alt} height={ctx.h} />,
-          ])
-        : null,
-      system: sys
-        ? frame('sys', [
-            <els.Svg key="title" source={sys.title} alt={t.system} width={sys.titleW} height={14} />,
-            <els.Svg key="rings" source={sys.rings.svg} alt={sys.rings.alt} height={sys.rings.h} />,
-            // The apps' table: the names, then a column per resource, its header a
-            // button that ranks the apps by it (▾ on the one picked). Every column
-            // sits on the same bottom line, so the rows line up
-            sys.table ? (
-              <els.Box key="table" flexDirection="row" alignItems="flex-end" columnGap={1}>
-                <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
-                  <els.Svg source={sys.table.names.svg} alt={sys.table.names.alt} height={sys.table.names.h} />
-                </els.Box>
-                {sys.table.columns.map(c => (
-                  <els.Box key={`col-${c.key}`} flexDirection="column" alignItems="center">
-                    {sys.table?.isSortable ? (
-                      button(`sort-${c.key}`, sorting === c.key ? `${c.label} ▾` : c.label, () => sortApps($, c.key), {
-                        dimColor: sorting !== c.key,
-                      })
-                    ) : (
-                      <els.Text dimColor>{c.label}</els.Text>
-                    )}
-                    <els.Svg source={c.svg} alt={c.alt} width={c.w} height={c.h} />
-                  </els.Box>
-                ))}
-              </els.Box>
-            ) : null,
-          ])
-        : null,
-      history: hist ? frame('hist', <els.Svg source={hist.svg} alt={hist.alt} height={hist.h} />) : null,
-      agents: frame('agents', [
-        <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
-          <els.Svg source={ag.head} alt={t.agents} width={ag.headW} height={14} />
-          {ag.finished > 0 ? button('clear', t.clear, clearFinished) : null}
-        </els.Box>,
-        ag.rows.length === 0 ? <els.Svg key="empty" source={ag.empty} alt={t.noAgents} height={ag.emptyH} /> : null,
-        ...ag.rows.map(r => (
-          <els.Box key={r.id} flexDirection="column">
-            <els.Svg source={r.top.svg} alt={r.alt} height={r.top.h} />
-            <els.Box flexDirection="row" alignItems="center">
-              <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
-                <els.Svg source={r.mid.svg} alt={r.mid.alt} height={r.mid.h} />
-              </els.Box>
-              {r.canStop ? button(`stop-${r.id}`, t.stop, stop(r.id)) : null}
-            </els.Box>
-            <els.Svg source={r.bottom.svg} alt={r.bottom.alt} height={r.bottom.h} />
-          </els.Box>
-        )),
-      ]),
-    }
-
-    // Customize: each block gets a header with its name, ↑ ↓ to move it, and
-    // Hide or Show; a hidden card keeps its place and shows its header alone
-    const cardOrder = await read($, order)
-    const hiddenCards = await read($, hidden)
-    const customizing = await read($, isCustomizing)
-    const placed = cardOrder.map((key, i) => {
-      const isHidden = hiddenCards.includes(key)
-      if (!customizing) return isHidden ? null : <els.Box key={`block-${key}`} flexDirection="column" gap={1}>{blocks[key]}</els.Box>
-      return (
-        <els.Box key={`block-${key}`} flexDirection="column" gap={1}>
-          <els.Box flexDirection="row" alignItems="center" gap={1}>
-            <els.Box flexGrow={1}>
-              <els.Text dimColor>{isHidden ? `${t.cards[key]} · ${t.hiddenTag}` : t.cards[key]}</els.Text>
-            </els.Box>
-            {i > 0 ? button(`up-${key}`, '↑', () => moveCard($, key, -1)) : null}
-            {i < cardOrder.length - 1 ? button(`down-${key}`, '↓', () => moveCard($, key, 1)) : null}
-            {button(`${isHidden ? 'show' : 'hide'}-${key}`, isHidden ? t.show : t.hide, () => toggleCard($, key))}
-          </els.Box>
-          {isHidden ? null : (blocks[key] ?? <els.Text dimColor>{t.nothingYet}</els.Text>)}
+      // Every card: the same app frame, which follows the panel's width
+      const frame = (key: string, children: RenderChildren) => (
+        <els.Box
+          key={key}
+          flexDirection="column"
+          gap={1}
+          paddingX={2}
+          paddingY={1}
+          borderStyle="round"
+          borderColor="rgba(255,255,255,0.09)"
+          backgroundColor="rgba(255,255,255,0.035)"
+        >
+          {children}
         </els.Box>
       )
-    })
 
-    const toggle = (
-      <els.Box key="customize-row" flexDirection="row" justifyContent="flex-end">
-        {button('customize', customizing ? t.done : t.customize, () => update($, isCustomizing, v => !v))}
-      </els.Box>
-    )
+      const blocks: Record<CardKey, RenderChildren> = {
+        limits: limits.length > 0 ? limits.map(c => frame(c.key, <els.Svg source={c.svg} alt={c.alt} height={c.h} />)) : null,
+        context: ctx
+          ? frame('ctx', [
+              <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
+                <els.Svg source={ctx.title} alt={t.context} width={ctx.titleW} height={14} />
+                {button('compact', busy ? t.compacting : t.compact, compact)}
+              </els.Box>,
+              <els.Svg key="body" source={ctx.svg} alt={ctx.alt} height={ctx.h} />,
+            ])
+          : null,
+        system: sys
+          ? frame('sys', [
+              <els.Svg key="title" source={sys.title} alt={t.system} width={sys.titleW} height={14} />,
+              <els.Svg key="rings" source={sys.rings.svg} alt={sys.rings.alt} height={sys.rings.h} />,
+              // The apps' table: the names, then a column per resource, its header a
+              // button that ranks the apps by it (▾ on the one picked). Every column
+              // sits on the same bottom line, so the rows line up
+              sys.table ? (
+                <els.Box key="table" flexDirection="row" alignItems="flex-end" columnGap={1}>
+                  <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
+                    <els.Svg source={sys.table.names.svg} alt={sys.table.names.alt} height={sys.table.names.h} />
+                  </els.Box>
+                  {sys.table.columns.map(c => (
+                    <els.Box key={`col-${c.key}`} flexDirection="column" alignItems="center">
+                      {sys.table?.isSortable ? (
+                        button(`sort-${c.key}`, sorting === c.key ? `${c.label} ▾` : c.label, () => sortApps($, c.key), {
+                          dimColor: sorting !== c.key,
+                        })
+                      ) : (
+                        <els.Text dimColor>{c.label}</els.Text>
+                      )}
+                      <els.Svg source={c.svg} alt={c.alt} width={c.w} height={c.h} />
+                    </els.Box>
+                  ))}
+                </els.Box>
+              ) : null,
+            ])
+          : null,
+        history: hist ? frame('hist', <els.Svg source={hist.svg} alt={hist.alt} height={hist.h} />) : null,
+        agents: frame('agents', [
+          <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
+            <els.Svg source={ag.head} alt={t.agents} width={ag.headW} height={14} />
+            {ag.finished > 0 ? button('clear', t.clear, clearFinished) : null}
+          </els.Box>,
+          ag.rows.length === 0 ? <els.Svg key="empty" source={ag.empty} alt={t.noAgents} height={ag.emptyH} /> : null,
+          ...ag.rows.map(r => (
+            <els.Box key={r.id} flexDirection="column">
+              <els.Svg source={r.top.svg} alt={r.alt} height={r.top.h} />
+              <els.Box flexDirection="row" alignItems="center">
+                <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
+                  <els.Svg source={r.mid.svg} alt={r.mid.alt} height={r.mid.h} />
+                </els.Box>
+                {r.canStop ? button(`stop-${r.id}`, t.stop, stop(r.id)) : null}
+              </els.Box>
+              <els.Svg source={r.bottom.svg} alt={r.bottom.alt} height={r.bottom.h} />
+            </els.Box>
+          )),
+        ]),
+      }
 
-    // Footer, centered under the cards: the two actions, then the installed
-    // version with what the last update check found. Centered, a button's own
-    // padding lines up with the text, and a narrow panel wraps it cleanly
-    const line = updateLine(upd, t)
-    const foot = footerLine(VERSION, line.text, line.color, line.reason, line.isBusy)
-    const footer = (
-      <els.Box key="footer" flexDirection="column">
-        <els.Box flexDirection="row" flexWrap="wrap" justifyContent="center" columnGap={1}>
-          {button('check-updates', t.checkUpdates, () => checkUpdate($, true))}
-          {customizing ? null : button('customize', t.customize, () => update($, isCustomizing, v => !v))}
-        </els.Box>
-        <els.Svg key="version" source={foot.svg} alt={foot.alt} height={foot.h} />
-      </els.Box>
-    )
-
-    // Every drawing has a fixed height: the panel redraws on each scroll and
-    // every second while an agent runs; without a height a drawing collapses
-    // for an instant and throws the scroll back to the top
-    const tree = (
-      <els.Box flexDirection="column" gap={1}>
-        {canUpdate(upd) && upd.latest ? (
-          // A new version: one line in a blue-tinted card, the whole sentence the
-          // button ("New version v… · Update"), blue and underlined under the
-          // pointer. Started on a timer, the press returns at once
-          <els.Box
-            key="update-banner"
-            flexDirection="row"
-            alignItems="center"
-            columnGap={1}
-            paddingX={2}
-            paddingY={1}
-            borderStyle="round"
-            borderColor="rgba(96,165,250,0.35)"
-            backgroundColor="rgba(96,165,250,0.08)"
-          >
-            <els.Svg source={dot(HEX.blue!)} alt="●" width={8} height={18} />
-            {button(
-              'update',
-              `${t.newVersion(upd.latest)} · ${t.update}`,
-              () => void $.clock.after(0, () => void runUpdate($).catch(() => undefined)),
-              { hover: { color: HEX.blue, underline: true } },
-            )}
+      // Customize: each block gets a header with its name, ↑ ↓ to move it, and
+      // Hide or Show; a hidden card keeps its place and shows its header alone
+      const cardOrder = await read($, order)
+      const hiddenCards = await read($, hidden)
+      const customizing = await read($, isCustomizing)
+      const placed = cardOrder.map((key, i) => {
+        const isHidden = hiddenCards.includes(key)
+        if (!customizing) return isHidden ? null : <els.Box key={`block-${key}`} flexDirection="column" gap={1}>{blocks[key]}</els.Box>
+        return (
+          <els.Box key={`block-${key}`} flexDirection="column" gap={1}>
+            <els.Box flexDirection="row" alignItems="center" gap={1}>
+              <els.Box flexGrow={1}>
+                <els.Text dimColor>{isHidden ? `${t.cards[key]} · ${t.hiddenTag}` : t.cards[key]}</els.Text>
+              </els.Box>
+              {i > 0 ? button(`up-${key}`, '↑', () => moveCard($, key, -1)) : null}
+              {i < cardOrder.length - 1 ? button(`down-${key}`, '↓', () => moveCard($, key, 1)) : null}
+              {button(`${isHidden ? 'show' : 'hide'}-${key}`, isHidden ? t.show : t.hide, () => toggleCard($, key))}
+            </els.Box>
+            {isHidden ? null : (blocks[key] ?? <els.Text dimColor>{t.nothingYet}</els.Text>)}
           </els.Box>
-        ) : banner ? (
-          frame('update-banner', <els.Svg source={banner.svg} alt={banner.alt} height={banner.h} />)
-        ) : null}
-        {/* While customizing, Done sits at the top, in reach right away */}
-        {customizing ? toggle : null}
-        {placed}
-        {footer}
-      </els.Box>
-    )
-    // The buttons this drawing no longer has are let go
-    for (const id of kept.keys()) if (id.startsWith(site) && !drawn.has(id)) kept.delete(id)
-    return tree
+        )
+      })
+
+      const toggle = (
+        <els.Box key="customize-row" flexDirection="row" justifyContent="flex-end">
+          {button('customize', customizing ? t.done : t.customize, () => update($, isCustomizing, v => !v))}
+        </els.Box>
+      )
+
+      // Footer, centered under the cards: the two actions, then the installed
+      // version with what the last update check found. Centered, a button's own
+      // padding lines up with the text, and a narrow panel wraps it cleanly
+      const line = updateLine(upd, t)
+      const foot = footerLine(VERSION, line.text, line.color, line.reason, line.isBusy)
+      const footer = (
+        <els.Box key="footer" flexDirection="column">
+          <els.Box flexDirection="row" flexWrap="wrap" justifyContent="center" columnGap={1}>
+            {button('check-updates', t.checkUpdates, () => checkUpdate($, true))}
+            {customizing ? null : button('customize', t.customize, () => update($, isCustomizing, v => !v))}
+          </els.Box>
+          <els.Svg key="version" source={foot.svg} alt={foot.alt} height={foot.h} />
+        </els.Box>
+      )
+
+      // Every drawing has a fixed height: the panel redraws on each scroll and
+      // every second while an agent runs; without a height a drawing collapses
+      // for an instant and throws the scroll back to the top
+      const tree = (
+        <els.Box flexDirection="column" gap={1}>
+          {canUpdate(upd) && upd.latest ? (
+            // A new version: one line in a blue-tinted card, the whole sentence the
+            // button ("New version v… · Update"), blue and underlined under the
+            // pointer. Started on a timer, the press returns at once
+            <els.Box
+              key="update-banner"
+              flexDirection="row"
+              alignItems="center"
+              columnGap={1}
+              paddingX={2}
+              paddingY={1}
+              borderStyle="round"
+              borderColor="rgba(96,165,250,0.35)"
+              backgroundColor="rgba(96,165,250,0.08)"
+            >
+              <els.Svg source={dot(HEX.blue!)} alt="●" width={8} height={18} />
+              {button(
+                'update',
+                `${t.newVersion(upd.latest)} · ${t.update}`,
+                () => void $.clock.after(0, () => void runUpdate($).catch(() => undefined)),
+                { hover: { color: HEX.blue, underline: true } },
+              )}
+            </els.Box>
+          ) : banner ? (
+            frame('update-banner', <els.Svg source={banner.svg} alt={banner.alt} height={banner.h} />)
+          ) : null}
+          {/* While customizing, Done sits at the top, in reach right away */}
+          {customizing ? toggle : null}
+          {placed}
+          {footer}
+        </els.Box>
+      )
+      // The buttons this drawing no longer has are let go
+      for (const id of kept.keys()) if (id.startsWith(site) && !drawn.has(id)) kept.delete(id)
+      return tree
+    } catch (err) {
+      // Never a blank panel: what failed is said, and kept for a bug report
+      const why = err instanceof Error ? err.message : String(err)
+      const where = err instanceof Error ? (err.stack ?? '').split('\n').slice(0, 6).join(' | ') : ''
+      await $.store.set('drawError', { at: await $.clock.now(), version: VERSION, why, where }).catch(() => undefined)
+      const t = await words($).catch(() => undefined)
+      return <els.Text dimColor>{t ? t.drawFailed(why) : `Conso could not draw this panel: ${why}`}</els.Text>
+    }
   })
 
   // Live agents
