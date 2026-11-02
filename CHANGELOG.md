@@ -2,6 +2,15 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.26.0] - 2026-11-02
+
+### Added
+- **Sort the apps.** CPU, GPU and RAM buttons next to the System title rank the apps by that column, its header marked; pick it again to rank them by all three. Each app keeps its color whatever its rank, and your choice is remembered.
+
+### Changed
+- **Updates leave your conversation alone.** **Update** installs the new version in the background and posts nothing in the conversation (no more `/reload-plugins`). It takes effect in your next conversation, and the other open ones show it as installed.
+- **Check for updates** takes a moment to answer, with a small turning wheel, and nothing on the line moves.
+
 ## [0.25.0] - 2026-11-02
 
 ### Added

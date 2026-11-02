@@ -37,10 +37,10 @@ export type Day = { date: string; usd: number }
 export type UpdateState = {
   latest?: string
   // checking: asking GitHub; current: no newer version; running: installing;
-  // done: installed, restart needed; error: the last check or install failed
+  // done: installed, active from the next conversation; error: the last check
+  // or install failed
   status: 'idle' | 'checking' | 'current' | 'running' | 'done' | 'error'
-  // why the last check or install failed, shown under the panel; 'restart'
-  // after an install that could not reload the plugins by itself
+  // why the last check or install failed, shown under the panel
   message?: string
 }
 
@@ -49,7 +49,10 @@ export type CardKey = 'limits' | 'context' | 'system' | 'history' | 'agents'
 
 // One app's share of the machine: CPU and GPU in percent of the whole, memory
 // in GB; a figure the system does not give per app is absent
-export type AppLoad = { name: string; cpu?: number; gpu?: number; ram?: number }
+export type AppLoad = { name: string; cpu?: number; gpu?: number; ram?: number; color?: number }
+
+// What the System card's apps are ranked by; null ranks them by all three
+export type AppSort = 'cpu' | 'gpu' | 'ram'
 
 // The machine's load at the last reading; a figure the machine would not give
 // is absent
@@ -61,7 +64,7 @@ export type SystemStats = {
   ramUsed?: number
   ramTotal?: number
   cores?: number
-  // the biggest consumers, each keeping its place (and color) while it stays
+  // the biggest consumers, each keeping its color while it stays among them
   apps?: AppLoad[]
 }
 
@@ -80,6 +83,7 @@ declare module 'claude-code' {
       order: CardKey[]
       // cards hidden from Customize, kept in their place in the order
       hidden: CardKey[]
+      appSort: AppSort | null
       isCustomizing: boolean
       lang: Lang
       system: SystemStats | null

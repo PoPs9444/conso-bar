@@ -1,4 +1,4 @@
-import type { AppLoad, SystemStats } from '../types'
+import type { AppLoad, AppSort, SystemStats } from '../types'
 
 // The machine's load: CPU and GPU in percent, memory in use, and the apps
 // behind it. One short system command per reading (run from register.tsx),
@@ -158,11 +158,11 @@ export const parseWindows = (out: string): Reading => {
   }
 }
 
-// The biggest consumers. CPU in percent of the whole machine, GPU in percent
-// (each app's GPU time over the interval, when known), memory in GB. Each
-// figure is scaled down where the apps add up to more than the machine
-// reports, so the rings never overflow
-export const topApps = (procs: Proc[], stats: SystemStats, gpuByPid?: Map<string, number>, n = 4): AppLoad[] => {
+// The biggest consumers, by one resource or by all three. CPU in percent of
+// the whole machine, GPU in percent (each app's GPU time over the interval,
+// when known), memory in GB. Each figure is scaled down where the apps add up
+// to more than the machine reports, so the rings never overflow
+export const topApps = (procs: Proc[], stats: SystemStats, gpuByPid?: Map<string, number>, n = 4, by?: AppSort | null): AppLoad[] => {
   if (procs.length === 0) return []
   const cores = stats.cores ?? 1
   const apps = new Map<string, { name: string; cpu?: number; gpu?: number; ram: number }>()
@@ -190,10 +190,19 @@ export const topApps = (procs: Proc[], stats: SystemStats, gpuByPid?: Map<string
   const kg = fit(stats.gpu, a => a.gpu)
   const kr = fit(stats.ramUsed, a => a.ram)
   const ramTotal = stats.ramTotal || 1
-  const score = (a: (typeof all)[number]) => (a.cpu ?? 0) * kc + (a.gpu ?? 0) * kg + ((a.ram * kr) / ramTotal) * 100
+  const share = (a: (typeof all)[number]) => ({
+    cpu: (a.cpu ?? 0) * kc,
+    gpu: (a.gpu ?? 0) * kg,
+    ram: ((a.ram * kr) / ramTotal) * 100,
+  })
+  const score = (a: (typeof all)[number]) => {
+    const x = share(a)
+    return x.cpu + x.gpu + x.ram
+  }
+  const rank = (a: (typeof all)[number]) => (by ? share(a)[by] : score(a))
   return all
     .filter(a => score(a) > 0)
-    .sort((x, y) => score(y) - score(x))
+    .sort((x, y) => rank(y) - rank(x) || score(y) - score(x))
     .slice(0, n)
     .map(a => ({
       name: a.name,
@@ -203,16 +212,24 @@ export const topApps = (procs: Proc[], stats: SystemStats, gpuByPid?: Map<string
     }))
 }
 
-// The new top apps, each one already shown keeping its place, so its color
-// does not jump from one reading to the next; newcomers take the free places
-export const keepPlaces = (shown: readonly AppLoad[] | undefined, next: AppLoad[]): AppLoad[] => {
-  const places: (AppLoad | undefined)[] = new Array(next.length).fill(undefined)
-  const rest = [...next]
-  ;(shown ?? []).forEach((old, i) => {
-    const j = rest.findIndex(a => a.name === old.name)
-    if (i < places.length && j >= 0) places[i] = rest.splice(j, 1)[0]
+// Each app keeps the color it had while it stays among the top ones, whatever
+// its rank; a newcomer takes the first free one
+export const keepColors = (shown: readonly AppLoad[] | undefined, next: AppLoad[], colors = 4): AppLoad[] => {
+  const had = new Map((shown ?? []).flatMap(a => (a.color === undefined ? [] : [[a.name, a.color] as const])))
+  const used = new Set<number>()
+  const kept = next.map(a => {
+    const c = had.get(a.name)
+    if (c === undefined || c >= colors || used.has(c)) return { ...a, color: undefined }
+    used.add(c)
+    return { ...a, color: c }
   })
-  return places.map(a => a ?? rest.shift()!)
+  return kept.map(a => {
+    if (a.color !== undefined) return a
+    let c = 0
+    while (used.has(c)) c++
+    used.add(c)
+    return { ...a, color: c }
+  })
 }
 
 export type Platform = 'mac' | 'linux' | 'windows'
