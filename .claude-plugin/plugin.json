@@ -1,11 +1,11 @@
 {
   "name": "conso-bar",
-  "version": "0.22.1",
+  "version": "0.23.0",
   "description": "Usage panel for Claude Code: limits, context, costs and live agents",
   "author": { "name": "PoPs9444", "url": "https://github.com/PoPs9444" },
   "homepage": "https://github.com/PoPs9444/conso-bar",
   "repository": "https://github.com/PoPs9444/conso-bar",
   "license": "MIT",
-  "keywords": ["usage", "rate-limits", "context", "cost", "tokens", "agents", "dashboard", "panel"],
+  "keywords": ["usage", "rate-limits", "context", "cost", "tokens", "agents", "dashboard", "panel", "cpu", "gpu", "ram", "system-monitor"],
   "types": "./types/index.d.ts"
 }

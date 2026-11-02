@@ -48,6 +48,7 @@ claude plugin test .
 | `hooks/dashboard.ts` | The limit, context, history and update cards, drawn in SVG |
 | `hooks/agents.ts` | The live agents card |
 | `hooks/i18n.ts` | Every text the panel shows, in every language |
+| `hooks/system.ts` | The System card's commands, and reading what they print on macOS, Linux and Windows |
 | `hooks/pricing.ts` | Public model prices, for the agents' estimated cost |
 | `types/index.d.ts` | The values Conso keeps, and their types |
 | `tests/band.test.tsx` | The tests |

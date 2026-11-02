@@ -2,6 +2,11 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.23.0] - 2026-11-02
+
+### Added
+- **System card**: three gauges for the CPU and GPU load and the memory in use, with the GB used out of the GB installed. Refreshed every 5 seconds (10 on Windows) from the system's own tools, and only written when a figure changes. Reorder it like any card; a saved order gets it right after Context.
+
 ## [0.22.1] - 2026-11-01
 
 ### Changed
@@ -64,6 +69,7 @@ Every notable change to Conso. Versions follow [semantic versioning](https://sem
 ### Added
 - First public version: the 5-hour and weekly limits with a forecast, the context with **Compact**, the cost history, live agents with **Stop** and **Clear**, the terminal bar, and the update banner.
 
+[0.23.0]: https://github.com/PoPs9444/conso-bar/compare/v0.22.1...v0.23.0
 [0.22.1]: https://github.com/PoPs9444/conso-bar/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/PoPs9444/conso-bar/compare/v0.21.2...v0.22.0
 [0.21.2]: https://github.com/PoPs9444/conso-bar/compare/v0.21.1...v0.21.2

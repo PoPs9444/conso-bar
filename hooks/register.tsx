@@ -1,19 +1,21 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { AgentRun, CardKey, Day, Lang, Limit, Snapshot, UpdateState } from '../types'
+import type { AgentRun, CardKey, Day, Lang, Limit, Snapshot, SystemStats, UpdateState } from '../types'
 
 import { agentsCard } from './agents'
 
-import { HEX, contextCard, footerLine, heat, historyCard, left, limitCards, updateCard } from './dashboard'
+import { HEX, contextCard, footerLine, heat, historyCard, left, limitCards, systemCard, updateCard } from './dashboard'
 import { STRINGS, toLang } from './i18n'
 import type { Strings } from './i18n'
 import { costOf } from './pricing'
+import { LINUX, MAC, WINDOWS, parseLinux, parseMac, parseWindows } from './system'
+import type { Platform } from './system'
 
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.22.1'
+export const VERSION = '0.23.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
@@ -22,11 +24,12 @@ const isCompacting = atom({ plugin: 'conso-bar', key: 'isCompacting' } as const,
 const agents = atom({ plugin: 'conso-bar', key: 'agentRuns' } as const, [])
 const tick = atom({ plugin: 'conso-bar', key: 'tick' } as const, 0)
 const history = atom({ plugin: 'conso-bar', key: 'history' } as const, [])
-const DEFAULT_ORDER: CardKey[] = ['limits', 'context', 'history', 'agents']
+const DEFAULT_ORDER: CardKey[] = ['limits', 'context', 'system', 'history', 'agents']
 const order = atom({ plugin: 'conso-bar', key: 'order' } as const, DEFAULT_ORDER)
 const isCustomizing = atom({ plugin: 'conso-bar', key: 'isCustomizing' } as const, false)
 const updateState = atom({ plugin: 'conso-bar', key: 'update' } as const, { status: 'idle' } as UpdateState)
 const lang = atom({ plugin: 'conso-bar', key: 'lang' } as const, 'en' as Lang)
+const system = atom({ plugin: 'conso-bar', key: 'system' } as const, null as SystemStats | null)
 
 // The words in the language Claude Code is set to
 const words = async ($: EngineInterface): Promise<Strings> => STRINGS[await read($, lang)]
@@ -186,6 +189,38 @@ const syncFromStore = async ($: EngineInterface) => {
 let poller: { cancel: () => void } | undefined
 let updatePoller: { cancel: () => void } | undefined
 let langPoller: { cancel: () => void } | undefined
+let systemPoller: { cancel: () => void } | undefined
+let isReading = false
+let platform: Platform | undefined
+
+// One reading of the machine's load; undefined when the machine would not say
+const readSystem = async ($: EngineInterface): Promise<SystemStats | undefined> => {
+  platform ??= (await $.env.get('APPDATA')) ? 'windows' : (await $.fs.exists('/proc/stat')) ? 'linux' : 'mac'
+  const r =
+    platform === 'windows'
+      ? await $.process.run(['powershell', '-NoProfile', '-Command', WINDOWS], { timeoutMs: 8000 })
+      : await $.process.run(['sh', '-c', platform === 'linux' ? LINUX : MAC], { timeoutMs: 8000 })
+  if (r.exitCode !== 0 && !r.stdout.trim()) return undefined
+  const stats = platform === 'windows' ? parseWindows(r.stdout) : platform === 'linux' ? parseLinux(r.stdout) : parseMac(r.stdout)
+  return stats.cpu === undefined && stats.ramUsed === undefined ? undefined : stats
+}
+
+// One reading of the machine's load, kept as drawn (whole percents, tenths of
+// a GB): a reading that changes nothing on screen writes nothing
+const pollSystem = async ($: EngineInterface) => {
+  if (isReading) return
+  isReading = true
+  try {
+    const s = await readSystem($)
+    if (!s) return
+    const whole = (n: number | undefined) => (n === undefined ? undefined : Math.round(n))
+    const tenth = (n: number | undefined) => (n === undefined ? undefined : Math.round(n * 10) / 10)
+    const shown: SystemStats = { ...s, cpu: whole(s.cpu), gpu: whole(s.gpu), ramUsed: tenth(s.ramUsed), ramTotal: tenth(s.ramTotal) }
+    if (!same(await read($, system), shown)) await update($, system, () => shown)
+  } finally {
+    isReading = false
+  }
+}
 
 // ---- Updates from GitHub
 
@@ -256,10 +291,17 @@ const runUpdate = async ($: EngineInterface) => {
 // ---- Card order, kept across sessions
 
 // A stored order missing a card (an older version) gets it back at the end
+// A stored order missing a card (an older version) gets it back right after the
+// card that comes before it by default
 const normalizeOrder = (stored: unknown): CardKey[] => {
   const known = Array.isArray(stored) ? stored.filter((k): k is CardKey => DEFAULT_ORDER.includes(k as CardKey)) : []
-  const unique = [...new Set(known)]
-  return [...unique, ...DEFAULT_ORDER.filter(k => !unique.includes(k))]
+  const list = [...new Set(known)]
+  DEFAULT_ORDER.forEach((k, i) => {
+    if (list.includes(k)) return
+    const before = DEFAULT_ORDER.slice(0, i).reverse().find(b => list.includes(b))
+    list.splice(before ? list.indexOf(before) + 1 : 0, 0, k)
+  })
+  return list
 }
 
 const moveCard = async ($: EngineInterface, key: CardKey, by: -1 | 1) => {
@@ -336,6 +378,18 @@ export const register: Register = on => {
     // The language again every 10 minutes, should it change in the meantime
     langPoller?.cancel()
     langPoller = $.clock.every(600_000, () => void syncLang($).catch(() => undefined))
+    // The machine's load, for the panel only: a first reading right away, then
+    // every 5 seconds (10 on Windows, where PowerShell starts slower)
+    systemPoller?.cancel()
+    systemPoller = undefined
+    if (e.surface !== 'terminal') {
+      $.clock.after(500, () => void pollSystem($).catch(() => undefined))
+      let beat = 0
+      systemPoller = $.clock.every(5000, () => {
+        if (platform === 'windows' && beat++ % 2 === 1) return
+        void pollSystem($).catch(() => undefined)
+      })
+    }
     return r
   })
 
@@ -374,6 +428,8 @@ export const register: Register = on => {
     const banner = updateBanner(upd, t)
     const hist = historyCard(await read($, history), t)
     const ctx = contextCard(s, t)
+    const stats = await read($, system)
+    const sys = stats ? systemCard(stats, t) : null
     const busy = await read($, isCompacting)
     const ag = agentsCard(await read($, agents), now, t)
 
@@ -425,6 +481,7 @@ export const register: Register = on => {
             <els.Svg key="body" source={ctx.svg} alt={ctx.alt} height={ctx.h} />,
           ])
         : null,
+      system: sys ? frame('sys', <els.Svg source={sys.svg} alt={sys.alt} height={sys.h} />) : null,
       history: hist ? frame('hist', <els.Svg source={hist.svg} alt={hist.alt} height={hist.h} />) : null,
       agents: frame('agents', [
         <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">

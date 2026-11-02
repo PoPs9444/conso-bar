@@ -33,6 +33,7 @@ Claude Code's limits usually show up when you hit them. Conso keeps them in sigh
 | --- | --- |
 | **Limits at a glance** | Your 5-hour and weekly usage, the time until each resets, and a forecast at your average pace. |
 | **Context and Compact** | How full the context window is, and a **Compact** button that runs `/compact` for you. |
+| **Your machine** | CPU and GPU load and the memory in use, refreshed every few seconds. |
 | **Cost history** | Today's cost and the last 7 days, across all your sessions. |
 | **Live agents** | Model, effort, duration, current tool, tokens and estimated cost for every agent. **Stop** ends one cleanly. |
 | **Your language** | English, French, Spanish, German, Italian or Portuguese, picked from Claude Code's own settings. |
@@ -71,6 +72,7 @@ Restart Claude Code. The **Conso** panel opens on the right at the start of ever
 | **5-hour limit** | Percentage used on a green-to-red gauge, time until the reset, and a forecast. |
 | **Weekly limit** | The same for the week, plus the cost of the current session. |
 | **Context** | Tokens used out of the window on a green-to-red gradient bar, and the **Compact** button. |
+| **System** | Three gauges: CPU, GPU and memory in use (with the GB used out of the GB installed). |
 | **History** | Today's cost and a bar for each of the last 7 days, from green for a light day to red for the heaviest. |
 | **Agents** | Every agent of the session, live. Running ones first. |
 
@@ -132,6 +134,8 @@ claude plugin update conso-bar@conso-bar
 
 Conso sends nothing anywhere: everything is computed and stored on your machine. Its only network request reads the version number published in this repository, to offer updates.
 
+For the **System** card, it runs one short command every 5 seconds in the desktop app, using only what the system ships with: `iostat`, `ioreg`, `vm_stat` and `sysctl` on macOS, `/proc` (and `nvidia-smi` when present) on Linux, PowerShell every 10 seconds on Windows.
+
 To pick its language, it reads Claude Code's `language` setting and, in the desktop app, the single `locale` key of the Claude app's settings file, extracted with the system's own `plutil` (macOS) or PowerShell (Windows), so nothing else in that file ever reaches Conso.
 
 ## FAQ
@@ -151,7 +155,13 @@ Limits are only known when the model replies. Without a message, no session rece
 <details>
 <summary><b>Does Conso slow Claude Code down?</b></summary>
 <br>
-No. The conversation's replies never pass through Conso: it only follows agents' steps. It writes only when a figure changes, and when nothing moved it hands the app the very same drawing, so nothing is repainted.
+No. The conversation's replies never pass through Conso: it only follows agents' steps. It writes only when a figure changes, and when nothing moved it hands the app the very same drawing, so nothing is repainted. The System card's reading is one short command every 5 seconds, a fraction of a percent of one core.
+</details>
+
+<details>
+<summary><b>Why is there no GPU figure?</b></summary>
+<br>
+On macOS, Conso reads the GPU's own utilization (Apple silicon and most Intel Macs). On Linux, it needs an NVIDIA card with <code>nvidia-smi</code>. On Windows, it reads the 3D engines' load. Where none of these is available, the gauge shows n/a.
 </details>
 
 <details>
