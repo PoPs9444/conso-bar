@@ -2,6 +2,11 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.26.2] - 2026-11-02
+
+### Changed
+- **Update in one click on the line itself.** A new version shows as one sentence in a blue-tinted card, *New version v… · Update*, and the whole sentence is the button, blue and underlined under the pointer. While it installs, a small wheel turns.
+
 ## [0.26.1] - 2026-11-02
 
 ### Changed

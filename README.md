@@ -62,7 +62,7 @@ Claude Code's limits usually show up when you hit them. Conso keeps them in sigh
 | **Cost history** | Today's cost and the last 7 days, across all your sessions. |
 | **Live agents** | Model, effort, duration, current tool, tokens and estimated cost for every agent. **Stop** ends one cleanly. |
 | **Your language** | English, French, Spanish, German, Italian or Portuguese, picked from Claude Code's own settings. |
-| **One-click updates** | A banner when a new version is out. **Update** installs it in the background, without touching your conversation. |
+| **One-click updates** | A line when a new version is out: click it and it installs in the background, without touching your conversation. |
 | **Private and light** | Nothing leaves your machine, and the panel repaints only what changed. |
 
 ## Installation
@@ -131,9 +131,9 @@ Missing yours? [Adding a language](CONTRIBUTING.md#adding-a-language) takes one 
 
 ## Updates
 
-<img src="docs/update.svg" alt="The &quot;New version&quot; banner with its Update button" width="372">
+<img src="docs/update.svg" alt="The &quot;New version · Update&quot; line: click it to update" width="372">
 
-A few seconds after a session starts, then every 6 hours, Conso checks this repository for a newer version. When there is one, a banner appears at the top of the panel, and **Update** installs it in the background with Claude Code's own commands. Nothing is posted in your conversation and nothing reloads under it: the new version takes effect in your next conversation.
+A few seconds after a session starts, then every 6 hours, Conso checks this repository for a newer version. When there is one, a line appears at the top of the panel: **New version v… · Update**. Click it and Conso installs the new version in the background with Claude Code's own commands, a small wheel turning meanwhile. Nothing is posted in your conversation and nothing reloads under it: the new version takes effect in your next conversation.
 
 The bottom of the panel shows your version with a status dot (green: up to date or installed, blue: new version, red: the check failed) and a permanent **Check for updates** button; while it checks, a small wheel turns.
 

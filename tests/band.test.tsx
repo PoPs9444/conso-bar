@@ -222,9 +222,10 @@ test('a newer version on GitHub shows the update banner', async ($, on) => {
   // The startup check runs 3 seconds after the session starts
   await clock.advance(3000)
   const ui = await $.ui.mount(PANE)
-  const alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
-  expect(alts).toContain('New version v99.0.0')
-  expect((await ui.find({ key: 'update' }))?.text).toBe('Update')
+  // One line, the whole of it the button
+  const line = await ui.find({ key: 'update' })
+  expect(line?.type).toBe('Button')
+  expect(line?.props.label).toBe('New version v99.0.0 · Update')
   await ui.unmount()
 })
 
