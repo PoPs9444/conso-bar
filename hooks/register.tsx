@@ -15,7 +15,7 @@ import type { GpuClient, Platform, Reading } from './system'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.26.1'
+export const VERSION = '0.26.2'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
@@ -393,11 +393,17 @@ const toggleCard = async ($: EngineInterface, key: CardKey) => {
   await $.store.set('hiddenCards', next)
 }
 
-// Update banner: only when GitHub has a newer version
+// Update banner: only when GitHub has a newer version. Installing or
+// installed, a drawing; otherwise the line to click, drawn by the panel
 const updateBanner = (u: UpdateState, t: Strings) =>
-  u.latest && isNewer(u.latest, VERSION) && (u.status === 'idle' || u.status === 'running' || u.status === 'done' || u.status === 'error')
-    ? updateCard(u.latest, u.status, t)
-    : null
+  u.latest && isNewer(u.latest, VERSION) && (u.status === 'running' || u.status === 'done') ? updateCard(u.latest, u.status, t) : null
+
+// A colored dot as a tiny drawing, before a line of text
+const dot = (color: string) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 18" width="8" height="18"><circle cx="4" cy="9" r="3.5" fill="${color}"/></svg>`
+
+// A newer version on GitHub, not yet installed: one line, pressed anywhere
+const canUpdate = (u: UpdateState) => !!u.latest && isNewer(u.latest, VERSION) && (u.status === 'idle' || u.status === 'error')
 
 // What the footer says about updates after the version number, and the color
 // of its dot: green up to date, blue a new version, red a failed check
@@ -694,25 +700,33 @@ export const register: Register = on => {
     // for an instant and throws the scroll back to the top
     return (
       <els.Box flexDirection="column" gap={1}>
-        {banner
-          ? frame('update', (
-              <els.Box flexDirection="row" alignItems="center">
-                <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
-                  <els.Svg source={banner.svg} alt={banner.alt} height={banner.h} />
-                </els.Box>
-                {upd.status === 'idle' || upd.status === 'error' ? (
-                  <els.Button
-                    key="update"
-                    label={t.update}
-                    plain
-                    dimColor
-                    // Started on a timer: the press returns at once, the install runs on
-                    onPress={() => void $.clock.after(0, () => void runUpdate($).catch(() => undefined))}
-                  />
-                ) : null}
-              </els.Box>
-            ))
-          : null}
+        {canUpdate(upd) && upd.latest ? (
+          // A new version: one line in a blue-tinted card, the whole sentence the
+          // button ("New version v… · Update"), blue and underlined under the
+          // pointer. Started on a timer, the press returns at once
+          <els.Box
+            key="update-banner"
+            flexDirection="row"
+            alignItems="center"
+            columnGap={1}
+            paddingX={2}
+            paddingY={1}
+            borderStyle="round"
+            borderColor="rgba(96,165,250,0.35)"
+            backgroundColor="rgba(96,165,250,0.08)"
+          >
+            <els.Svg source={dot(HEX.blue!)} alt="●" width={8} height={18} />
+            <els.Button
+              key="update"
+              label={`${t.newVersion(upd.latest)} · ${t.update}`}
+              plain
+              hover={{ color: HEX.blue, underline: true }}
+              onPress={() => void $.clock.after(0, () => void runUpdate($).catch(() => undefined))}
+            />
+          </els.Box>
+        ) : banner ? (
+          frame('update-banner', <els.Svg source={banner.svg} alt={banner.alt} height={banner.h} />)
+        ) : null}
         {/* While customizing, Done sits at the top, in reach right away */}
         {customizing ? toggle : null}
         {placed}

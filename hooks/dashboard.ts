@@ -443,15 +443,22 @@ export const contextCard = (s: Snapshot, t: Strings) => {
   return { svg, h: H, title: inline(head), titleW, alt: `${t.context}: ${tokenLabel}, ${num(cp, 1)}%` }
 }
 
-// "New version" banner at the top of the panel; once installed, a second line
-// says it takes effect in the next conversation, nothing reloads under this one
-export const updateCard = (latest: string, status: 'idle' | 'running' | 'done' | 'error', t: Strings) => {
-  const text = status === 'running' ? t.updating(latest) : status === 'done' ? t.installed(latest) : t.newVersion(latest)
+// A small turning wheel: something is under way
+const wheel = (cx: number, cy: number, color: string) =>
+  `<g transform="translate(${cx} ${cy})"><circle class="track" r="4.5" stroke-width="1.6"/>` +
+  `<circle r="4.5" stroke="${color}" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-dasharray="9 30">` +
+  `<animateTransform attributeName="transform" type="rotate" from="0" to="360" dur=".8s" repeatCount="indefinite"/></circle></g>`
+
+// The update banner while installing (a turning wheel) and once installed (a
+// second line: it takes effect in the next conversation, nothing reloads under
+// this one). A new version itself is one clickable line, drawn by the panel
+export const updateCard = (latest: string, status: 'running' | 'done', t: Strings) => {
+  const text = status === 'running' ? t.updating(latest) : t.installed(latest)
   const color = status === 'done' ? HEX.green! : HEX.blue!
   const H = status === 'done' ? 34 : 18
   const svg = fluid(
     H,
-    `<circle cx="5" cy="9" r="3.5" fill="${color}"/>` +
+    (status === 'running' ? wheel(5, 9, color) : `<circle cx="5" cy="9" r="3.5" fill="${color}"/>`) +
       fadeRight(
         H,
         0,
@@ -470,17 +477,13 @@ export const updateCard = (latest: string, status: 'idle' | 'running' | 'done' |
 export const footerLine = (version: string, status: string, color: string, reason?: string, isBusy = false) => {
   const H = reason ? 32 : 16
   const line = `v${version}${status ? ` · ${status}` : ''}`
-  const wheel =
-    `<g transform="translate(23 8)"><circle class="track" r="4.5" stroke-width="1.6"/>` +
-    `<circle r="4.5" stroke="${color}" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-dasharray="9 30">` +
-    `<animateTransform attributeName="transform" type="rotate" from="0" to="360" dur=".8s" repeatCount="indefinite"/></circle></g>`
   const svg = fluid(
     H,
     `<svg x="50%" y="0" width="1" height="${H}" overflow="visible">` +
       `<text x="8" y="12" text-anchor="end" font-size="11" font-variant-numeric="tabular-nums">` +
       `<tspan fill="${color}">●</tspan><tspan class="t3">  v${esc(version)}</tspan></text>` +
       (isBusy
-        ? `<text class="t3" x="8" y="12" font-size="11" xml:space="preserve"> · </text>${wheel}<text class="t3" x="32" y="12" font-size="11">${esc(status)}</text>`
+        ? `<text class="t3" x="8" y="12" font-size="11" xml:space="preserve"> · </text>${wheel(23, 8, color)}<text class="t3" x="32" y="12" font-size="11">${esc(status)}</text>`
         : status
           ? `<text class="t3" x="8" y="12" font-size="11" xml:space="preserve"> · ${esc(status)}</text>`
           : '') +

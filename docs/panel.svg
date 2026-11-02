@@ -399,4 +399,4 @@
     .green { color: #16a34a; } .amber { color: #d97706; } .red { color: #dc2626; } .blue { color: #2563eb; }
     .up { fill: #16a34a; }
   }
-</style><svg x="50%" y="0" width="1" height="16" overflow="visible"><text x="8" y="12" text-anchor="end" font-size="11" font-variant-numeric="tabular-nums"><tspan fill="#4ade80">●</tspan><tspan class="t3" fill="#6e6e74">  v0.26.1</tspan></text><text class="t3" fill="#6e6e74" x="8" y="12" font-size="11" xml:space="preserve"> · Up to date</text></svg></svg></svg>
+</style><svg x="50%" y="0" width="1" height="16" overflow="visible"><text x="8" y="12" text-anchor="end" font-size="11" font-variant-numeric="tabular-nums"><tspan fill="#4ade80">●</tspan><tspan class="t3" fill="#6e6e74">  v0.26.2</tspan></text><text class="t3" fill="#6e6e74" x="8" y="12" font-size="11" xml:space="preserve"> · Up to date</text></svg></svg></svg>
