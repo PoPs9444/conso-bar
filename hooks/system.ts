@@ -27,6 +27,39 @@ export type GpuClient = { pid: string; time: number }
 // GPU share as the system measured it
 export type Reading = { stats: SystemStats; procs: Proc[]; gpuTimes?: Map<string, GpuClient>; gpuByPid?: Map<string, number> }
 
+// A graphics card's name as people say it: NVIDIA GeForce RTX 3080 is
+// RTX 3080, AMD Radeon RX 6800 XT is RX 6800 XT, Intel(R) Arc(TM) A770
+// Graphics is Arc A770, Apple M4 Max is M4 Max
+export const gpuShort = (name: string) => {
+  let n = name.replace(/\((R|TM)\)/gi, '').replace(/\s+/g, ' ').trim()
+  n = n.replace(/^(NVIDIA|AMD|Intel|Apple) /i, '').replace(/^GeForce /i, '').replace(/^Radeon (?=RX )/i, '')
+  n = n.replace(/ GPU$/i, '')
+  // "Graphics" at the end says nothing once a model number is there
+  if (/\d/.test(n)) n = n.replace(/ Graphics$/i, '')
+  return n
+}
+
+// Of the graphics cards Windows lists, the one doing the work: a dedicated
+// card before one built into the processor, never a virtual display adapter
+// (remote desktop, screen sharing)
+export const pickGpu = (names: readonly string[]) => {
+  const rank = (n: string) =>
+    /microsoft|basic display|virtual|remote|parsec|displaylink|citrix|vmware|hyper-v|mirage|spacedesk/i.test(n)
+      ? 0
+      : /nvidia|geforce|quadro|tesla|rtx/i.test(n)
+        ? 4
+        : /radeon.*\b(rx|pro|vii|vega)\b|\barc\b/i.test(n)
+          ? 3
+          : /radeon|amd/i.test(n)
+            ? 2
+            : 1
+  const best = names
+    .map(n => n.trim())
+    .filter(n => n && rank(n) > 0)
+    .sort((a, b) => rank(b) - rank(a))[0]
+  return best ? gpuShort(best) : undefined
+}
+
 // The app a process belongs to: the outermost .app bundle in its path (an
 // app's helpers count as the app), the system's own processes as "macOS"
 export const appOf = (path: string) => {
@@ -87,7 +120,7 @@ export const parseMac = (out: string): Reading => {
     stats: {
       cpu: us !== undefined && sy !== undefined && Number.isFinite(us + sy) ? pct(us + sy) : undefined,
       gpu: pct(num(gpu)),
-      gpuName: model?.replace(/^Apple\s+/, ''),
+      gpuName: model ? gpuShort(model) : undefined,
       ramUsed: app !== undefined && wired !== undefined ? ((app + wired + compressed) * pageSize) / GIB : undefined,
       ramTotal: memsize ? memsize / GIB : undefined,
       cores: cores || undefined,
@@ -125,7 +158,7 @@ export const parseLinux = (out: string): Reading => {
     stats: {
       cpu,
       gpu: gpuPart.trim() ? pct(num(gpu?.trim())) : undefined,
-      gpuName: name.join(',').trim().replace(/^NVIDIA\s+/, '') || undefined,
+      gpuName: gpuShort(name.join(',')) || undefined,
       ramUsed: total !== undefined && available !== undefined ? ((total - available) * 1024) / GIB : undefined,
       ramTotal: total !== undefined ? (total * 1024) / GIB : undefined,
       cores: num(coresPart.trim()) || undefined,
@@ -136,7 +169,7 @@ export const parseLinux = (out: string): Reading => {
 }
 
 // Windows: the processors' load, free memory, the 3D engines' utilization by
-// process, and each process's memory and CPU. A process's CPU is its processor
+// process, each process's memory and CPU, and the graphics cards' names. A process's CPU is its processor
 // time gained over the second the GPU counters take to sample (one second at
 // least), what Task Manager shows; its time so far alone would be a lifetime
 // average. Idle (Id 0) is the processors' idle time, not an app
@@ -150,10 +183,11 @@ export const WINDOWS =
   "$q=($s | ForEach-Object { if($_.CookedValue -gt 0 -and $_.InstanceName -match 'pid_(\\d+)_'){ \"$($matches[1])=$($_.CookedValue)\" } }) -join ';'; " +
   '$r=1000-$w.ElapsedMilliseconds; if($r -gt 0){ Start-Sleep -Milliseconds $r }; $d=$w.Elapsed.TotalSeconds; ' +
   "$p=(Get-Process | Where-Object Id -ne 0 | ForEach-Object { \"$($_.Id),$($_.ProcessName),$($_.CPU - $a[$_.Id]),$($_.WorkingSet64)\" }) -join ';'; " +
-  '"$c|$($o.TotalVisibleMemorySize)|$($o.FreePhysicalMemory)|$n|$g|$d|$p|$q"'
+  "$v=(Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name }) -join ';'; " +
+  '"$c|$($o.TotalVisibleMemorySize)|$($o.FreePhysicalMemory)|$n|$g|$d|$p|$q|$v"'
 
 export const parseWindows = (out: string): Reading => {
-  const [cpu, total, free, cores, gpu, span, apps = '', gpuApps = ''] = out.trim().split('|')
+  const [cpu, total, free, cores, gpu, span, apps = '', gpuApps = '', cards = ''] = out.trim().split('|')
   const t = num(total)
   const f = num(free)
   const dt = num(span)
@@ -178,6 +212,7 @@ export const parseWindows = (out: string): Reading => {
     stats: {
       cpu: pct(num(cpu)),
       gpu: hasGpu ? pct(num(gpu!.trim())) : undefined,
+      gpuName: pickGpu(cards.split(';')),
       ramUsed: t !== undefined && f !== undefined ? ((t - f) * 1024) / GIB : undefined,
       ramTotal: t !== undefined ? (t * 1024) / GIB : undefined,
       cores: num(cores) || undefined,

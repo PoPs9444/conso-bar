@@ -333,7 +333,9 @@ export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) 
     )
   }
   const cpuDetail = `<tspan class="t3">${esc(sys.cores ? t.cores(sys.cores) : '')}</tspan>`
-  const gpuDetail = `<tspan class="t3">${esc(sys.gpu === undefined ? t.na : (sys.gpuName ?? ''))}</tspan>`
+  // A long card name stays within its ring's column
+  const card = sys.gpuName && sys.gpuName.length > 16 ? `${sys.gpuName.slice(0, 15).trimEnd()}…` : (sys.gpuName ?? '')
+  const gpuDetail = `<tspan class="t3">${esc(sys.gpu === undefined ? t.na : card)}</tspan>`
   const ramDetail =
     sys.ramUsed !== undefined && sys.ramTotal
       ? `<tspan class="t1" font-weight="700">${esc(String(gb(sys.ramUsed)))}</tspan><tspan class="t3"> / ${esc(String(gb(sys.ramTotal)))} ${esc(t.gb)}</tspan>`
