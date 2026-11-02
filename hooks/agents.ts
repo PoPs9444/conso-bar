@@ -7,7 +7,8 @@ import type { Strings } from './i18n'
 
 
 // claude-opus-5-5 → Opus 5.5; an alias or an unknown name stays as it is
-export const modelName = (id: string) => {
+export const modelName = (id: string | undefined) => {
+  if (!id) return ''
   const m = /claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d+))?/i.exec(id)
   if (!m || !m[1] || !m[2]) return id.replace(/^claude-/, '')
   const family = m[1][0]!.toUpperCase() + m[1].slice(1).toLowerCase()
@@ -168,6 +169,8 @@ const rowParts = (a: AgentRun, o: number, now: number, t: Strings) => {
     `<text x="100%" y="${o + 13}" text-anchor="end" font-size="11.5" font-weight="600" font-variant-numeric="tabular-nums" fill="${running ? HEX.green : a.status === 'done' ? '#6e6e74' : HEX.red}">${sideSvg}</text>`
 
   const dim = running ? '' : ' fill-opacity=".65"'
+  // No model told (none came with the agent's steps): its type in its place
+  const model = modelName(a.model) || a.type
   const sep = `<tspan class="t3">  ·  </tspan>`
   const eff = effortName(a.effort, t)
   const parts = effortParts(a.effort, t)
@@ -179,7 +182,7 @@ const rowParts = (a: AgentRun, o: number, now: number, t: Strings) => {
     20,
     0,
     `<text x="24" y="15" font-size="12">` +
-    `<tspan font-weight="700" fill="${familyColor(a.model)}"${dim}>${esc(modelName(a.model))}</tspan>` +
+    `<tspan font-weight="700" fill="${familyColor(a.model)}"${dim}>${esc(model)}</tspan>` +
     // Only the level takes its color, the word "effort" stays white
     (parts ? sep + (word ? (t.effort.isWordFirst ? `${word} ${level}` : `${level} ${word}`) : level) : '') +
       `</text>`,
@@ -210,15 +213,30 @@ const rowParts = (a: AgentRun, o: number, now: number, t: Strings) => {
     mid: {
       svg: fluid(20, mid, AGENT_STYLE),
       h: 20,
-      alt: `${modelName(a.model)}${eff ? `, ${eff}` : ''}`,
+      alt: `${model}${eff ? `, ${eff}` : ''}`,
     },
     bottom: { svg: fluid(17, bottom, AGENT_STYLE), h: 17, alt: activity },
   }
 }
 
+// A record an event left a field out of (a workflow's agent, a step with no
+// model, a record from an older version): every field the row is drawn by
+const sound = (a: AgentRun, now: number): AgentRun => ({
+  ...a,
+  id: String(a.id),
+  description: typeof a.description === 'string' ? a.description : '',
+  type: typeof a.type === 'string' && a.type ? a.type : 'Agent',
+  model: typeof a.model === 'string' ? a.model : '',
+  startedAt: Number.isFinite(a.startedAt) ? a.startedAt : now,
+  steps: Number.isFinite(a.steps) ? a.steps : 0,
+  outputTokens: Number.isFinite(a.outputTokens) ? a.outputTokens : 0,
+  usd: Number.isFinite(a.usd) ? a.usd : 0,
+})
+
 // The card itself is a Box (to hold Clear and the Stop buttons): here the title
 // with the counter, and one drawing per agent, from the most active to the oldest
-export const agentsCard = (agents: readonly AgentRun[], now: number, t: Strings) => {
+export const agentsCard = (list: readonly AgentRun[], now: number, t: Strings) => {
+  const agents = list.map(a => sound(a, now))
   const running = agents.filter(a => a.status === 'running')
   const finished = agents.filter(a => a.status !== 'running')
   const shown = [...running, ...[...finished].reverse()]
@@ -238,12 +256,22 @@ export const agentsCard = (agents: readonly AgentRun[], now: number, t: Strings)
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${headW} 14" width="${headW}" height="14">` +
     `<style>${STYLE}</style>${title(0, 11, name)}${count}</svg>`
 
-  const rows = shown.map((a, i) => ({
-    id: a.id,
-    canStop: a.status === 'running' && !a.isStopping,
-    ...rowParts(a, i > 0 ? 12 : 0, now, t),
-    alt: `${a.description || a.type}: ${modelName(a.model)}${a.effort !== undefined ? `, ${effortName(a.effort, t)}` : ''}, ${statusName(a.status, t)}`,
-  }))
+  // A row that cannot be drawn is left out, never the whole panel
+  let drawn = 0
+  const rows = shown.flatMap(a => {
+    try {
+      const row = {
+        id: a.id,
+        canStop: a.status === 'running' && !a.isStopping,
+        ...rowParts(a, drawn > 0 ? 12 : 0, now, t),
+        alt: `${a.description || a.type}: ${modelName(a.model) || a.type}${a.effort !== undefined ? `, ${effortName(a.effort, t)}` : ''}, ${statusName(a.status, t)}`,
+      }
+      drawn++
+      return [row]
+    } catch {
+      return []
+    }
+  })
 
   const empty = fluid(18, `<text class="t3" x="0" y="13" font-size="12">${esc(t.noAgents)}</text>`)
 

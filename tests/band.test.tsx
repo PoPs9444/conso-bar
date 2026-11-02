@@ -296,6 +296,26 @@ test('every agent row draws model, effort and activity', async ($, on) => {
   await ui.unmount()
 })
 
+test('an agent recorded without a name or a model still draws, and the panel with it', async ($, on) => {
+  on('state.get', (_: unknown, e: { key: string }, next: (e: unknown) => unknown) =>
+    e.key === 'agentRuns'
+      ? { value: { value: [
+          { id: 'w', isLinked: true, usd: 0, status: 'running', startedAt: 0, steps: 2, outputTokens: 0 },
+          { id: 'x', isLinked: true, usd: 0, description: 'Test', type: 'Explore', model: 'claude-opus-5-5', status: 'done', startedAt: 0, endedAt: 1000, steps: 1, outputTokens: 0 },
+        ], version: 1 } }
+      : next(e),
+  )
+  await setup($, on)
+  const ui = await $.ui.mount(PANE)
+  const alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  expect((await ui.findAll({ type: 'Text' })).some(x => x.text === 'engine')).toBe(false)
+  expect(alts.some(a => a.startsWith('Context:'))).toBe(true)
+  expect(alts.some(a => a.startsWith('Agent: Agent, '))).toBe(true)
+  expect(alts.some(a => a.startsWith('Test: Opus 5.5'))).toBe(true)
+  expect(alts.every(a => a.length > 0)).toBe(true)
+  await ui.unmount()
+})
+
 test('a newer version on GitHub shows the update banner', async ($, on) => {
   on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
   await setup($, on)

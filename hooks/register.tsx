@@ -15,7 +15,7 @@ import type { GpuClient, Platform, Proc, Reading } from './system'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.28.1'
+export const VERSION = '0.28.2'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
@@ -615,16 +615,26 @@ export const register: Register = on => {
 
     await read($, tick)
     const now = await $.clock.now()
-    const limits = limitCards(s, now, t)
+    // A card that cannot be drawn is left out: the rest of the panel still shows
+    const safely = <T,>(draw: () => T, otherwise: T): T => {
+      try {
+        return draw()
+      } catch {
+        return otherwise
+      }
+    }
+    const limits = safely(() => limitCards(s, now, t), [])
     const upd = await read($, updateState)
-    const banner = updateBanner(upd, t)
-    const hist = historyCard(await read($, history), t)
-    const ctx = contextCard(s, t)
+    const banner = safely(() => updateBanner(upd, t), null)
+    const days = await read($, history)
+    const hist = safely(() => historyCard(days, t), null)
+    const ctx = safely(() => contextCard(s, t), null)
     const stats = await read($, system)
     const sorting = await read($, appSort)
-    const sys = stats ? systemCard(stats, t, sorting) : null
+    const sys = stats ? safely(() => systemCard(stats, t, sorting), null) : null
     const busy = await read($, isCompacting)
-    const ag = agentsCard((await read($, agentView)) ?? (await read($, agents)), now, t)
+    const runs = (await read($, agentView)) ?? (await read($, agents))
+    const ag = safely(() => agentsCard(runs, now, t), agentsCard([], now, t))
 
     // Every button of the panel: plain, dim at rest unless told otherwise
     const site = `${e.surface}\u0000`
@@ -833,10 +843,10 @@ export const register: Register = on => {
       const run: AgentRun = {
         id: r.agentId ?? e.tool_use_id,
         isLinked: r.agentId !== undefined,
-        prompt: e.prompt.slice(0, 200),
+        prompt: (e.prompt ?? '').slice(0, 200),
         usd: 0,
-        description: e.description,
-        type: e.subagentType,
+        description: e.description ?? '',
+        type: e.subagentType || 'Agent',
         model: r.model,
         status: 'running',
         startedAt: now,
@@ -883,7 +893,7 @@ export const register: Register = on => {
     if (!known && !info) return yield* next(e)
     // One write per step: linked or added, then counted
     const count = (a: AgentRun): AgentRun =>
-      a.isStopping ? a : { ...a, model: e.model, effort: e.effort ?? a.effort, steps: a.steps + 1 }
+      a.isStopping ? a : { ...a, model: e.model || a.model, effort: e.effort ?? a.effort, steps: a.steps + 1 }
     const list = await setAgents($, cur => {
       if (cur.some(a => a.id === id)) return cur.map(a => (a.id === id ? count(a) : a))
       // Known to the engine but not linked by its prompt: take a pending launch

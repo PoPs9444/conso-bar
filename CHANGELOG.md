@@ -2,6 +2,11 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.28.2] - 2026-11-02
+
+### Fixed
+- **The panel no longer stays empty in some conversations.** An agent the app reported without a name or a model (a workflow's agent, say) stopped the whole panel from drawing, leaving "Nothing to show yet". That agent now shows under its type, and a card that cannot be drawn is left out while the rest of the panel still shows.
+
 ## [0.28.1] - 2026-11-02
 
 ### Added
