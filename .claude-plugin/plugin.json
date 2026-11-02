@@ -1,6 +1,6 @@
 {
   "name": "conso-bar",
-  "version": "0.28.1",
+  "version": "0.28.2",
   "description": "Usage panel for Claude Code: limits, context, costs, live agents and your machine's load by app",
   "author": { "name": "PoPs9444", "url": "https://github.com/PoPs9444" },
   "homepage": "https://github.com/PoPs9444/conso-bar",
