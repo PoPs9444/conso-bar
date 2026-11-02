@@ -33,11 +33,11 @@ Claude Code's limits usually show up when you hit them. Conso keeps them in sigh
 | --- | --- |
 | **Limits at a glance** | Your 5-hour and weekly usage, the time until each resets, and a forecast at your average pace. |
 | **Context and Compact** | How full the context window is, and a **Compact** button that runs `/compact` for you. |
-| **Your machine** | CPU, GPU and memory, each cut into colored quarters for the apps using the most, refreshed every few seconds. |
+| **Your machine** | CPU, GPU and memory, each cut into colored quarters for the apps using the most, sortable by any of the three, refreshed every few seconds. |
 | **Cost history** | Today's cost and the last 7 days, across all your sessions. |
 | **Live agents** | Model, effort, duration, current tool, tokens and estimated cost for every agent. **Stop** ends one cleanly. |
 | **Your language** | English, French, Spanish, German, Italian or Portuguese, picked from Claude Code's own settings. |
-| **One-click updates** | A banner when a new version is out. **Update** applies it with no restart. |
+| **One-click updates** | A banner when a new version is out. **Update** installs it in the background, without touching your conversation. |
 | **Private and light** | Nothing leaves your machine, and the panel repaints only what changed. |
 
 ## Installation
@@ -69,7 +69,7 @@ Restart Claude Code. The **Conso** panel opens on the right at the start of ever
 
 | Card | What it shows |
 | --- | --- |
-| **System** | Three rings for CPU, GPU and memory in use, each cut into a colored quarter per app, and a table of the four apps using the most with their share of each. |
+| **System** | Three rings for CPU, GPU and memory in use, each cut into a colored quarter per app, and a table of the four apps using the most with their share of each. **CPU**, **GPU** and **RAM** next to the title rank them by that column. |
 | **Limits** | Your 5-hour and weekly usage in one card: a green-to-red ring for each, the time until it resets, a forecast, and the session cost. |
 | **Context** | Percentage and tokens used out of the window, a green-to-red gradient bar, and the **Compact** button. |
 | **History** | Today's cost, the last 7 days' total, and a small bar per day, from green for a light day to red for the heaviest. |
@@ -108,9 +108,9 @@ Missing yours? [Adding a language](CONTRIBUTING.md#adding-a-language) takes one 
 
 <img src="docs/update.svg" alt="The &quot;New version&quot; banner with its Update button" width="372">
 
-A few seconds after a session starts, then every 6 hours, Conso checks this repository for a newer version. When there is one, a banner appears at the top of the panel, and **Update** installs it with Claude Code's own commands, then reloads the plugins: the new version is live right away.
+A few seconds after a session starts, then every 6 hours, Conso checks this repository for a newer version. When there is one, a banner appears at the top of the panel, and **Update** installs it in the background with Claude Code's own commands. Nothing is posted in your conversation and nothing reloads under it: the new version takes effect in your next conversation.
 
-The bottom of the panel shows your version with a status dot (green: up to date, blue: new version, red: the check failed) and a permanent **Check for updates** button.
+The bottom of the panel shows your version with a status dot (green: up to date or installed, blue: new version, red: the check failed) and a permanent **Check for updates** button; while it checks, a small wheel turns.
 
 To update by hand:
 
@@ -166,7 +166,7 @@ On macOS, Conso reads the GPU's own utilization (Apple silicon and most Intel Ma
 <details>
 <summary><b>Which apps does the System card list?</b></summary>
 <br>
-The four using the most CPU, GPU and memory together, the rest grouped as Other. An app's helper processes count as the app, and the system's own processes as macOS. On macOS, every column is filled. On Linux and Windows, the system does not give a reliable load per app, so apps are ranked and shown by memory.
+The four using the most CPU, GPU and memory together, the rest grouped as Other. Click **CPU**, **GPU** or **RAM** next to the card's title to list the four using the most of that one instead; click it again to go back. An app's helper processes count as the app, and the system's own processes as macOS. On macOS, every column is filled. On Linux and Windows, the system does not give a reliable load per app, so apps are ranked and shown by memory.
 </details>
 
 <details>

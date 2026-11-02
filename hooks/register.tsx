@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { AgentRun, CardKey, Day, Lang, Limit, Snapshot, SystemStats, UpdateState } from '../types'
+import type { AgentRun, AppSort, CardKey, Day, Lang, Limit, Snapshot, SystemStats, UpdateState } from '../types'
 
 import { agentsCard } from './agents'
 
@@ -9,15 +9,18 @@ import { HEX, contextCard, footerLine, heat, historyCard, left, limitCards, syst
 import { STRINGS, toLang } from './i18n'
 import type { Strings } from './i18n'
 import { costOf } from './pricing'
-import { LINUX, MAC, WINDOWS, keepPlaces, parseLinux, parseMac, parseWindows, topApps } from './system'
+import { LINUX, MAC, WINDOWS, keepColors, parseLinux, parseMac, parseWindows, topApps } from './system'
 import type { Platform, Reading } from './system'
 
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.25.0'
+export const VERSION = '0.26.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
+// A manual check shows its progress at least this long: a result that lands at
+// once would only flicker
+const MIN_CHECK_MS = 1200
 
 const snapshot = atom({ plugin: 'conso-bar', key: 'snapshot' } as const, null)
 const isCompacting = atom({ plugin: 'conso-bar', key: 'isCompacting' } as const, false)
@@ -29,6 +32,7 @@ const DEFAULT_ORDER: CardKey[] = ['system', 'limits', 'context', 'history', 'age
 const OLD_ORDER = ['limits', 'context', 'system', 'history', 'agents'].join()
 const order = atom({ plugin: 'conso-bar', key: 'order' } as const, DEFAULT_ORDER)
 const hidden = atom({ plugin: 'conso-bar', key: 'hidden' } as const, [] as CardKey[])
+const appSort = atom({ plugin: 'conso-bar', key: 'appSort' } as const, null as AppSort | null)
 const isCustomizing = atom({ plugin: 'conso-bar', key: 'isCustomizing' } as const, false)
 const updateState = atom({ plugin: 'conso-bar', key: 'update' } as const, { status: 'idle' } as UpdateState)
 const lang = atom({ plugin: 'conso-bar', key: 'lang' } as const, 'en' as Lang)
@@ -239,9 +243,9 @@ const pollSystem = async ($: EngineInterface) => {
     const whole = (n: number | undefined) => (n === undefined ? undefined : Math.round(n))
     const tenth = (n: number | undefined) => (n === undefined ? undefined : Math.round(n * 10) / 10)
     const before = await read($, system)
-    const apps = keepPlaces(
+    const apps = keepColors(
       before?.apps,
-      topApps(reading.procs, s, shares).map(a => ({ name: a.name, cpu: whole(a.cpu), gpu: whole(a.gpu), ram: tenth(a.ram) })),
+      topApps(reading.procs, s, shares, 4, await read($, appSort)).map(a => ({ name: a.name, cpu: whole(a.cpu), gpu: whole(a.gpu), ram: tenth(a.ram) })),
     )
     const shown: SystemStats = {
       ...s,
@@ -273,26 +277,33 @@ const isNewer = (a: string, b: string) => {
 // failure; the manual one (Check for updates) says what happened
 const checkUpdate = async ($: EngineInterface, isManual = false) => {
   const t = await words($)
-  if (isManual) await update($, updateState, (u): UpdateState => ({ ...u, status: 'checking', message: undefined }))
+  const startedAt = await $.clock.now()
+  if (isManual) {
+    if ((await read($, updateState)).status === 'checking') return
+    await update($, updateState, (u): UpdateState => ({ ...u, status: 'checking', message: undefined }))
+  }
+  let result: (u: UpdateState) => UpdateState
   try {
     const r = await $.http.fetch(`https://raw.githubusercontent.com/${REPO}/main/.claude-plugin/plugin.json`)
     if (!r.ok) throw new Error(t.githubAnswered(r.status))
     const latest = String((JSON.parse(r.text) as { version?: unknown }).version ?? '')
     if (!/^\d+(\.\d+)*$/.test(latest)) throw new Error(t.noVersion)
-    await update($, updateState, (u): UpdateState =>
-      u.status === 'running' || u.status === 'done'
-        ? u
-        : { latest, status: isNewer(latest, VERSION) ? 'idle' : 'current', message: undefined },
-    )
+    // Already installed from another conversation: it only waits for the next one
+    const installed = await $.store.get('installedVersion').catch(() => undefined)
+    const status = !isNewer(latest, VERSION) ? 'current' : installed === latest ? 'done' : 'idle'
+    result = u => (u.status === 'running' || u.status === 'done' ? u : { latest, status, message: undefined })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    await update($, updateState, (u): UpdateState =>
-      isManual || u.status === 'checking' ? { ...u, status: 'error', message } : { ...u, message },
-    )
+    result = u => (isManual || u.status === 'checking' ? { ...u, status: 'error', message } : { ...u, message })
   }
+  const wait = isManual ? MIN_CHECK_MS - ((await $.clock.now()) - startedAt) : 0
+  if (wait > 0) $.clock.after(wait, () => void update($, updateState, result).catch(() => undefined))
+  else await update($, updateState, result)
 }
 
-// Claude Code's two official commands: refresh the marketplace, then the plugin
+// Claude Code's two official commands, in the background: refresh the
+// marketplace, then the plugin. Nothing reloads under the conversation and
+// nothing is posted in it: the new version takes effect in the next one
 const runUpdate = async ($: EngineInterface) => {
   const t = await words($)
   const cur = await read($, updateState)
@@ -307,15 +318,7 @@ const runUpdate = async ($: EngineInterface) => {
       if (r.exitCode !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').pop() || `code ${r.exitCode}`)
     }
     await update($, updateState, (u): UpdateState => ({ ...u, status: 'done', message: undefined }))
-    // Load the new version right away: /reload-plugins swaps the plugins in
-    // this session, no restart. Where it cannot run, a restart applies it
-    try {
-      await $.command.run({ command: 'reload-plugins' })
-      $.ui.toast(t.updatedReloaded)
-    } catch {
-      await update($, updateState, (u): UpdateState => ({ ...u, message: 'restart' }))
-      $.ui.toast(t.updatedRestart)
-    }
+    if (cur.latest) await $.store.set('installedVersion', cur.latest)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     await update($, updateState, (u): UpdateState => ({ ...u, status: 'error', message }))
@@ -351,6 +354,15 @@ const moveCard = async ($: EngineInterface, key: CardKey, by: -1 | 1) => {
   await $.store.set('cardOrder', next)
 }
 
+// Rank the System card's apps by one column; the column picked again goes back
+// to all three. The rows reorder at once, then a reading picks the top apps
+// for that column
+const sortApps = async ($: EngineInterface, key: AppSort) => {
+  const next = await update($, appSort, cur => (cur === key ? null : key))
+  await $.store.set('appSort', next)
+  $.clock.after(0, () => void pollSystem($).catch(() => undefined))
+}
+
 // Hide a card, or bring it back where it was
 const toggleCard = async ($: EngineInterface, key: CardKey) => {
   const next = await update($, hidden, list => (list.includes(key) ? list.filter(k => k !== key) : [...list, key]))
@@ -360,21 +372,23 @@ const toggleCard = async ($: EngineInterface, key: CardKey) => {
 // Update banner: only when GitHub has a newer version
 const updateBanner = (u: UpdateState, t: Strings) =>
   u.latest && isNewer(u.latest, VERSION) && (u.status === 'idle' || u.status === 'running' || u.status === 'done' || u.status === 'error')
-    ? updateCard(u.latest, u.status, u.message === 'restart', t)
+    ? updateCard(u.latest, u.status, t)
     : null
 
 // What the footer says about updates after the version number, and the color
 // of its dot: green up to date, blue a new version, red a failed check
-const updateLine = (u: UpdateState, t: Strings): { text: string; color: string; reason?: string } =>
+const updateLine = (u: UpdateState, t: Strings): { text: string; color: string; reason?: string; isBusy?: boolean } =>
   u.status === 'checking'
-    ? { text: t.checkingUpdates, color: '#6e6e74' }
+    ? { text: t.checking, color: HEX.blue!, isBusy: true }
     : u.status === 'current'
       ? { text: t.upToDate, color: HEX.green! }
       : u.status === 'error' && u.message
         ? { text: t.checkFailed, color: HEX.red!, reason: u.message }
-        : u.latest && isNewer(u.latest, VERSION)
-          ? { text: t.available(u.latest), color: HEX.blue! }
-          : { text: '', color: '#6e6e74' }
+        : u.status === 'done' && u.latest
+          ? { text: t.ready(u.latest), color: HEX.green! }
+          : u.latest && isNewer(u.latest, VERSION)
+            ? { text: t.available(u.latest), color: HEX.blue! }
+            : { text: '', color: '#6e6e74' }
 
 const toSnapshot = (u: {
   cost?: { usd: number }
@@ -408,6 +422,8 @@ export const register: Register = on => {
     await remember($, first).catch(() => undefined)
     const storedOrder = await $.store.get('cardOrder').catch(() => undefined)
     await update($, order, () => normalizeOrder(storedOrder))
+    const storedSort = await $.store.get('appSort').catch(() => undefined)
+    await update($, appSort, () => (storedSort === 'cpu' || storedSort === 'gpu' || storedSort === 'ram' ? storedSort : null))
     const storedHidden = await $.store.get('hiddenCards').catch(() => undefined)
     await update($, hidden, () =>
       Array.isArray(storedHidden) ? storedHidden.filter((k): k is CardKey => DEFAULT_ORDER.includes(k as CardKey)) : [],
@@ -474,7 +490,8 @@ export const register: Register = on => {
     const hist = historyCard(await read($, history), t)
     const ctx = contextCard(s, t)
     const stats = await read($, system)
-    const sys = stats ? systemCard(stats, t) : null
+    const sorting = await read($, appSort)
+    const sys = stats ? systemCard(stats, t, sorting) : null
     const busy = await read($, isCompacting)
     const ag = agentsCard(await read($, agents), now, t)
 
@@ -526,7 +543,28 @@ export const register: Register = on => {
             <els.Svg key="body" source={ctx.svg} alt={ctx.alt} height={ctx.h} />,
           ])
         : null,
-      system: sys ? frame('sys', <els.Svg source={sys.svg} alt={sys.alt} height={sys.h} />) : null,
+      system: sys
+        ? frame('sys', [
+            <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
+              <els.Svg source={sys.title} alt={t.system} width={sys.titleW} height={14} />
+              {sys.sortable.length ? (
+                <els.Box flexDirection="row" alignItems="center" columnGap={1}>
+                  <els.Text dimColor>{t.sortBy}</els.Text>
+                  {sys.sortable.map(key => (
+                    <els.Button
+                      key={`sort-${key}`}
+                      label={key.toUpperCase()}
+                      plain
+                      dimColor={sorting !== key}
+                      onPress={() => sortApps($, key)}
+                    />
+                  ))}
+                </els.Box>
+              ) : null}
+            </els.Box>,
+            <els.Svg key="body" source={sys.svg} alt={sys.alt} height={sys.h} />,
+          ])
+        : null,
       history: hist ? frame('hist', <els.Svg source={hist.svg} alt={hist.alt} height={hist.h} />) : null,
       agents: frame('agents', [
         <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
@@ -596,13 +634,13 @@ export const register: Register = on => {
     // version with what the last update check found. Centered, a button's own
     // padding lines up with the text, and a narrow panel wraps it cleanly
     const line = updateLine(upd, t)
-    const foot = footerLine(VERSION, line.text, line.color, line.reason)
+    const foot = footerLine(VERSION, line.text, line.color, line.reason, line.isBusy)
     const footer = (
       <els.Box key="footer" flexDirection="column">
         <els.Box flexDirection="row" flexWrap="wrap" justifyContent="center" columnGap={1}>
           <els.Button
             key="check-updates"
-            label={upd.status === 'checking' ? t.checking : t.checkUpdates}
+            label={t.checkUpdates}
             plain
             dimColor
             onPress={() => checkUpdate($, true)}
@@ -627,7 +665,14 @@ export const register: Register = on => {
                   <els.Svg source={banner.svg} alt={banner.alt} height={banner.h} />
                 </els.Box>
                 {upd.status === 'idle' || upd.status === 'error' ? (
-                  <els.Button key="update" label={t.update} plain dimColor onPress={() => runUpdate($)} />
+                  <els.Button
+                    key="update"
+                    label={t.update}
+                    plain
+                    dimColor
+                    // Started on a timer: the press returns at once, the install runs on
+                    onPress={() => void $.clock.after(0, () => void runUpdate($).catch(() => undefined))}
+                  />
                 ) : null}
               </els.Box>
             ))

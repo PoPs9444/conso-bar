@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { VERSION } from '../hooks/register'
-import { appOf, keepPlaces, parseGpuClients, parseLinux, parseMac, parseWindows, topApps } from '../hooks/system'
+import { appOf, keepColors, parseGpuClients, parseLinux, parseMac, parseWindows, topApps } from '../hooks/system'
 
 const USAGE = {
   startedAt: 0,
@@ -297,16 +297,24 @@ test('Check for updates says up to date, or why it failed', async ($, on) => {
   ui = await $.ui.mount(PANE)
   const footer = async () =>
     String((await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt)).find(a => a.startsWith(`v${VERSION}`)))
+  // A moment of checking, the dot pulsing and the button unchanged, then the answer
+  expect(await footer()).toBe('v' + VERSION + ' · Checking…')
+  expect((await ui.find({ key: 'check-updates' }))?.text).toBe('Check for updates')
+  expect(String((await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith(`v${VERSION}`))?.props.source)).toContain('<animateTransform')
+  await clock.advance(1200)
+  await ui.unmount()
+  ui = await $.ui.mount(PANE)
   expect(await footer()).toBe('v' + VERSION + ' · Up to date')
   reply = { ok: false, status: 503, text: '' }
   await ui.press({ key: 'check-updates' })
+  await clock.advance(1200)
   await ui.unmount()
   ui = await $.ui.mount(PANE)
   expect(await footer()).toBe('v' + VERSION + ' · Update check failed: GitHub answered 503')
   await ui.unmount()
 })
 
-test('Update installs the new version, then reloads the plugins', async ($, on) => {
+test('Update installs in the background and posts nothing in the conversation', async ($, on) => {
   const ran: string[][] = []
   const commands: string[] = []
   on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
@@ -323,12 +331,40 @@ test('Update installs the new version, then reloads the plugins', async ($, on) 
   await clock.advance(3000)
   const ui = await $.ui.mount(PANE)
   await ui.press({ key: 'update' })
+  await clock.advance(0)
   await ui.unmount()
   expect(ran).toEqual([
     ['claude', 'plugin', 'marketplace', 'update', 'conso-bar'],
     ['claude', 'plugin', 'update', 'conso-bar@conso-bar'],
   ])
-  expect(commands).toContain('reload-plugins')
+  // No /reload-plugins: the new version waits for the next conversation
+  expect(commands).toEqual([])
+  const ui2 = await $.ui.mount(PANE)
+  const alts = (await ui2.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  expect(alts).toContain('v99.0.0 installed. Takes effect in your next conversation')
+  expect(alts).toContain(`v${VERSION} · v99.0.0 ready`)
+  await ui2.unmount()
+})
+
+test('another conversation sees the version already installed', async ($, on) => {
+  on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
+  const c = mock.clock(on, { now: Date.parse('2026-11-01T00:00:00Z') })
+  mock.store(on, { installedVersion: '99.0.0' })
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: USAGE }))
+  on('session.id', () => ({ value: 'session-test' }))
+  on('command.register', () => ({ value: { command: 'conso' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'check-updates' })
+  await c.advance(1200)
+  await ui.unmount()
+  const ui2 = await $.ui.mount(PANE)
+  // No Update to press again: the banner says it waits for the next conversation
+  expect((await ui2.findAll({ type: 'Button' })).map(b => b.text)).not.toContain('Update')
+  expect((await ui2.findAll({ type: 'Svg' })).map(x => String(x.props.alt))).toContain('v99.0.0 installed. Takes effect in your next conversation')
+  await ui2.unmount()
 })
 
 // ---- Language: English by default, Claude Code's language when it is set
@@ -496,7 +532,7 @@ const macOut = (gpu: number) => `${MAC_OUT}@@
   101  64.0  2097152 /Applications/Claude.app/Contents/MacOS/Claude
   102  32.0  1048576 /Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)
   103  16.0   524288 /Users/someone/Library/Application Support/Claude/claude-code/2.1.316/claude.app/Contents/MacOS/claude
-  201  48.0  3145728 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+  201  48.0  5242880 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
   301   8.0  1048576 /System/Library/CoreServices/WindowServer
   302   1.6   262144 /usr/libexec/logd
 @@
@@ -540,18 +576,23 @@ test('the top apps: one per app, in percent of the machine, never above its tota
   // Claude, its helpers and the claude CLI count as one app; 112% of one core out of 16
   expect(apps[0]).toEqual({ name: 'Claude', cpu: 7, gpu: 20, ram: 3.5 })
   expect(apps.map(a => a.name)).toEqual(['Claude', 'Google Chrome', 'macOS'])
-  // 8 GB of processes at most fit in 6 GB in use: each app is scaled down
+  // 10 GB of processes at most fit in 6 GB in use: each app is scaled down
   const tight = topApps(procs, { ...stats, ramUsed: 6 })
   expect(Math.round(tight.reduce((s, a) => s + (a.ram ?? 0), 0) * 10) / 10).toBe(6)
   // No GPU figures per app: none shown
   expect(topApps(procs, stats)[0]!.gpu).toBe(undefined)
+  // By one column: the top apps for that column
+  expect(topApps(procs, stats, undefined, 2, 'ram').map(a => a.name)).toEqual(['Google Chrome', 'Claude'])
 })
 
-test('an app keeps its place, and its color, while it stays at the top', () => {
-  const shown = [{ name: 'Claude' }, { name: 'Chrome' }, { name: 'Xcode' }]
-  expect(keepPlaces(shown, [{ name: 'Xcode' }, { name: 'Safari' }, { name: 'Claude' }]).map(a => a.name)).toEqual(['Claude', 'Safari', 'Xcode'])
-  expect(keepPlaces(undefined, [{ name: 'A' }, { name: 'B' }]).map(a => a.name)).toEqual(['A', 'B'])
-  expect(keepPlaces(shown, [{ name: 'Xcode' }]).map(a => a.name)).toEqual(['Xcode'])
+test('an app keeps its color while it stays among the top ones', () => {
+  const shown = [{ name: 'Claude', color: 0 }, { name: 'Chrome', color: 1 }, { name: 'Xcode', color: 2 }]
+  expect(keepColors(shown, [{ name: 'Xcode' }, { name: 'Safari' }, { name: 'Claude' }]).map(a => [a.name, a.color])).toEqual([
+    ['Xcode', 2],
+    ['Safari', 1],
+    ['Claude', 0],
+  ])
+  expect(keepColors(undefined, [{ name: 'A' }, { name: 'B' }]).map(a => a.color)).toEqual([0, 1])
 })
 
 test('Linux: CPU from two samples, memory from MemAvailable, an NVIDIA GPU', () => {
@@ -606,9 +647,9 @@ test('the System card comes first, with each app\'s share of the machine', async
   await clock.advance(500)
   let ui = await $.ui.mount(PANE)
   let alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
-  const card = () => String(alts.find(a => a.startsWith('System')))
+  const card = () => String(alts.find(a => a.startsWith('System:')))
   expect(card()).toBe(
-    'System: CPU 25%, GPU 26%, RAM 50.8 / 64 GB. Claude: CPU 7%, RAM 3.5 GB; Google Chrome: CPU 3%, RAM 3 GB; macOS: CPU 1%, RAM 1.3 GB',
+    'System: CPU 25%, GPU 26%, RAM 50.8 / 64 GB. Claude: CPU 7%, RAM 3.5 GB; Google Chrome: CPU 3%, RAM 5 GB; macOS: CPU 1%, RAM 1.3 GB',
   )
   // First, by default
   expect(alts.findIndex(a => a.startsWith('System'))).toBeLessThan(alts.findIndex(a => a.startsWith('5-hour')))
@@ -620,6 +661,32 @@ test('the System card comes first, with each app\'s share of the machine', async
   alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
   expect(card()).toContain('Claude: CPU 7%, GPU 20%, RAM 3.5 GB')
   expect(card()).toContain('macOS: CPU 1%, GPU 0%')
+  await ui.unmount()
+})
+
+test('CPU, GPU or RAM ranks the apps by that column; picked again, by all three', async ($, on) => {
+  mockMac(on, () => 1e9)
+  await setup($, on)
+  await clock.advance(500)
+  let ui = await $.ui.mount(PANE)
+  const svg = async () => (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('System:'))
+  const order = async () => String((await svg())?.props.alt).split('. ')[1]!.split('; ').map(x => x.split(':')[0])
+  const dots = async () => [...String((await svg())?.props.source).matchAll(/<circle cx="4" cy="[\d.]+" r="3.5" fill="(#[0-9a-f]{6})"/g)].map(m => m[1])
+  expect(await order()).toEqual(['Claude', 'Google Chrome', 'macOS'])
+  expect((await ui.find({ key: 'sort-ram' }))?.text).toBe('RAM')
+  await ui.press({ key: 'sort-ram' })
+  await clock.advance(0)
+  await ui.unmount()
+  ui = await $.ui.mount(PANE)
+  expect(await order()).toEqual(['Google Chrome', 'Claude', 'macOS'])
+  expect(String((await svg())?.props.source)).toContain('▾ RAM')
+  // Each app keeps its color: Chrome stays violet though it now comes first
+  expect(await dots()).toEqual(['#a78bfa', '#60a5fa', '#f472b6', '#7c7c84'])
+  await ui.press({ key: 'sort-ram' })
+  await clock.advance(0)
+  await ui.unmount()
+  ui = await $.ui.mount(PANE)
+  expect(await order()).toEqual(['Claude', 'Google Chrome', 'macOS'])
   await ui.unmount()
 })
 

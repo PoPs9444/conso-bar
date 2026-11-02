@@ -1,4 +1,4 @@
-import type { AppLoad, Day, Limit, Snapshot, SystemStats } from '../types'
+import type { AppLoad, AppSort, Day, Limit, Snapshot, SystemStats } from '../types'
 
 import type { Strings } from './i18n'
 
@@ -299,11 +299,16 @@ const quarters = (cx: number, cy: number, r: number, parts: { p: number; color: 
 }
 
 // System card: CPU, GPU and memory as three rings, each cut into the share of
-// the apps that use the most, then those apps in a table with their colors
-export const systemCard = (sys: SystemStats, t: Strings) => {
+// the apps that use the most, then those apps in a table with their colors,
+// ranked by the column picked (its header marked) or by all three. The title
+// sits above, beside the buttons that pick the column
+export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) => {
   // 50.8, 64, 128: a tenth only where there is one
   const gb = (n: number) => (n >= 100 ? String(Math.round(n)) : String(Math.round(n * 10) / 10))
-  const apps = sys.apps ?? []
+  // Ranked again right away when the column changes; each app keeps its color
+  const by = (a: AppLoad, key: AppSort) => (key === 'ram' ? a.ram : a[key]) ?? -1
+  const apps = sort ? [...(sys.apps ?? [])].sort((x, y) => by(y, sort) - by(x, sort)) : (sys.apps ?? [])
+  const appColor = (a: AppLoad, i: number) => APP_COLORS[(a.color ?? i) % APP_COLORS.length]!
   const ramPct = sys.ramUsed !== undefined && sys.ramTotal ? (sys.ramUsed / sys.ramTotal) * 100 : undefined
   const ramShare = (a: AppLoad) => (a.ram !== undefined && sys.ramTotal ? (a.ram / sys.ramTotal) * 100 : undefined)
   const sum = (xs: (number | undefined)[]) => xs.reduce<number>((s, x) => s + (x ?? 0), 0)
@@ -316,7 +321,7 @@ export const systemCard = (sys: SystemStats, t: Strings) => {
 
   const gauge = (x: string, r: (typeof resources)[number], detail: string) => {
     const color = r.p === undefined ? '#6e6e74' : heat(r.p)
-    const parts = apps.map((a, i) => ({ p: r.share(a) ?? 0, color: APP_COLORS[i % APP_COLORS.length]! }))
+    const parts = apps.map((a, i) => ({ p: r.share(a) ?? 0, color: appColor(a, i) }))
     const others = Math.max(0, (r.p ?? 0) - sum(parts.map(x => x.p)))
     return (
       `<svg x="${x}" y="0" width="1" height="1" overflow="visible">` +
@@ -334,7 +339,6 @@ export const systemCard = (sys: SystemStats, t: Strings) => {
       ? `<tspan class="t1" font-weight="700">${esc(String(gb(sys.ramUsed)))}</tspan><tspan class="t3"> / ${esc(String(gb(sys.ramTotal)))} ${esc(t.gb)}</tspan>`
       : `<tspan class="t3">${esc(t.na)}</tspan>`
   let body =
-    title(0, 11, t.system.toUpperCase()) +
     gauge('16.67%', resources[0]!, cpuDetail) +
     gauge('50%', resources[1]!, gpuDetail) +
     gauge('83.33%', resources[2]!, ramDetail)
@@ -354,14 +358,21 @@ export const systemCard = (sys: SystemStats, t: Strings) => {
     }
     const colX = (i: number) => -(cols.length - 1 - i) * COL
     const rows = [
-      ...apps.map((a, i) => ({ name: a.name, color: APP_COLORS[i % APP_COLORS.length]!, isOther: false, cells: cols.map(r => appValue(r, a)) })),
+      ...apps.map((a, i) => ({ name: a.name, color: appColor(a, i), isOther: false, cells: cols.map(r => appValue(r, a)) })),
       { name: t.other, color: OTHER_COLOR, isOther: true, cells: cols.map(otherValue) },
     ]
     const y0 = 160
     H = y0 + (rows.length - 1) * 18 + 6
     body +=
       `<rect class="trackfill" x="0" y="124" width="100%" height="1"/>` +
-      right(cols.map((r, i) => `<text class="t3" x="${colX(i)}" y="142" text-anchor="end" font-size="10" font-weight="600" letter-spacing=".6">${r.label}</text>`).join('')) +
+      right(
+        cols
+          .map((r, i) => {
+            const isSorted = sort === r.label.toLowerCase()
+            return `<text class="${isSorted ? 't1' : 't3'}" x="${colX(i)}" y="142" text-anchor="end" font-size="10" font-weight="600" letter-spacing=".6">${isSorted ? '▾ ' : ''}${r.label}</text>`
+          })
+          .join(''),
+      ) +
       fadeRight(
         H,
         (cols.length - 1) * COL + 52,
@@ -391,9 +402,22 @@ export const systemCard = (sys: SystemStats, t: Strings) => {
     )
     .map((figures, i) => `${apps[i]!.name}: ${figures}`)
     .join('; ')
+  // The title alone, drawn like the other cards' titles; the drawing below it
+  // starts at the rings
+  const name = t.system.toUpperCase()
+  const titleW = titleWidth(name)
+  const head =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${titleW} 14" width="${titleW}" height="14">` +
+    `<style>${STYLE}</style>${title(0, 11, name)}</svg>`
+  const TOP = 24
+  const sortable = apps.length ? resources.filter(r => r.isSplit).map(r => r.label.toLowerCase() as AppSort) : []
   return {
-    svg: fluid(H, body),
-    h: H,
+    svg: fluid(H - TOP, `<g transform="translate(0 ${-TOP})">${body}</g>`),
+    h: H - TOP,
+    title: inline(head),
+    titleW,
+    // the columns worth ranking by: two at least
+    sortable: sortable.length > 1 ? sortable : [],
     alt: `${t.system}: CPU ${figure(sys.cpu)}, GPU ${figure(sys.gpu)}, RAM ${ram}${appsAlt ? `. ${appsAlt}` : ''}`,
   }
 }
@@ -421,34 +445,48 @@ export const contextCard = (s: Snapshot, t: Strings) => {
   return { svg, h: H, title: inline(head), titleW, alt: `${t.context}: ${tokenLabel}, ${num(cp, 1)}%` }
 }
 
-// "New version" banner at the top of the panel
-export const updateCard = (latest: string, status: 'idle' | 'running' | 'done' | 'error', needsRestart: boolean, t: Strings) => {
-  const text =
-    status === 'running'
-      ? t.updating(latest)
-      : status === 'done'
-        ? needsRestart
-          ? t.installedRestart(latest)
-          : t.installedReloading(latest)
-        : t.newVersion(latest)
+// "New version" banner at the top of the panel; once installed, a second line
+// says it takes effect in the next conversation, nothing reloads under this one
+export const updateCard = (latest: string, status: 'idle' | 'running' | 'done' | 'error', t: Strings) => {
+  const text = status === 'running' ? t.updating(latest) : status === 'done' ? t.installed(latest) : t.newVersion(latest)
   const color = status === 'done' ? HEX.green! : HEX.blue!
-  const svg = fluid(
-    18,
-    `<circle cx="5" cy="9" r="3.5" fill="${color}"/>` +
-      `<text x="16" y="13" font-size="12.5" font-weight="600" fill="${color}">${esc(text)}</text>`,
-  )
-  return { svg, h: 18, alt: text }
-}
-
-// Panel footer, centered under the cards: a status dot, the installed version
-// and what the last update check found; a failure's reason on a second line
-export const footerLine = (version: string, status: string, color: string, reason?: string) => {
-  const H = reason ? 32 : 16
-  const line = `v${version}${status ? ` · ${status}` : ''}`
+  const H = status === 'done' ? 34 : 18
   const svg = fluid(
     H,
-    `<text x="50%" y="12" text-anchor="middle" font-size="11" font-variant-numeric="tabular-nums">` +
-      `<tspan fill="${color}">●</tspan><tspan class="t3">  ${esc(line)}</tspan></text>` +
+    `<circle cx="5" cy="9" r="3.5" fill="${color}"/>` +
+      fadeRight(
+        H,
+        0,
+        `<text x="16" y="13" font-size="12.5" font-weight="600" fill="${color}">${esc(text)}</text>` +
+          (status === 'done' ? `<text class="t2" x="16" y="30" font-size="11.5">${esc(t.nextConversation)}</text>` : ''),
+      ),
+  )
+  return { svg, h: H, alt: status === 'done' ? `${text}. ${t.nextConversation}` : text }
+}
+
+// Panel footer under the cards: a status dot, the installed version and what
+// the last update check found; a failure's reason on a second line. The
+// version stays put whatever the status says: it ends just left of the middle
+// and the status grows to the right, so a check moves nothing. While checking,
+// a small wheel turns before the status
+export const footerLine = (version: string, status: string, color: string, reason?: string, isBusy = false) => {
+  const H = reason ? 32 : 16
+  const line = `v${version}${status ? ` · ${status}` : ''}`
+  const wheel =
+    `<g transform="translate(23 8)"><circle class="track" r="4.5" stroke-width="1.6"/>` +
+    `<circle r="4.5" stroke="${color}" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-dasharray="9 30">` +
+    `<animateTransform attributeName="transform" type="rotate" from="0" to="360" dur=".8s" repeatCount="indefinite"/></circle></g>`
+  const svg = fluid(
+    H,
+    `<svg x="50%" y="0" width="1" height="${H}" overflow="visible">` +
+      `<text x="8" y="12" text-anchor="end" font-size="11" font-variant-numeric="tabular-nums">` +
+      `<tspan fill="${color}">●</tspan><tspan class="t3">  v${esc(version)}</tspan></text>` +
+      (isBusy
+        ? `<text class="t3" x="8" y="12" font-size="11" xml:space="preserve"> · </text>${wheel}<text class="t3" x="32" y="12" font-size="11">${esc(status)}</text>`
+        : status
+          ? `<text class="t3" x="8" y="12" font-size="11" xml:space="preserve"> · ${esc(status)}</text>`
+          : '') +
+      `</svg>` +
       (reason ? `<text class="t3" x="50%" y="28" text-anchor="middle" font-size="11">${esc(reason)}</text>` : ''),
   )
   return { svg, h: H, alt: reason ? `${line}: ${reason}` : line }

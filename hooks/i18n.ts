@@ -31,6 +31,8 @@ export type Strings = {
   na: string
   // the apps outside the top ones
   other: string
+  // before the System card's CPU, GPU and RAM buttons
+  sortBy: string
   gb: string
   status: { done: string; failed: string; aborted: string; stopping: string; running: string }
   // the level takes the color, the word stays white; some languages put the word first
@@ -51,18 +53,18 @@ export type Strings = {
   hiddenTag: string
   done: string
   upToDate: string
-  checkingUpdates: string
   checkFailed: string
   available: (v: string) => string
   newVersion: (v: string) => string
   updating: (v: string) => string
-  installedReloading: (v: string) => string
-  installedRestart: (v: string) => string
+  installed: (v: string) => string
+  // under the banner once installed: no reload, nothing in the conversation
+  nextConversation: string
+  // after the version in the footer, once installed
+  ready: (v: string) => string
   githubAnswered: (code: number) => string
   noVersion: string
   compactFailed: (m: string) => string
-  updatedReloaded: string
-  updatedRestart: string
   updateFailed: (m: string) => string
   waiting: string
   nothingYet: string
@@ -96,6 +98,7 @@ const en: Strings = {
   cores: n => `${n} cores`,
   na: 'n/a',
   other: 'Other',
+  sortBy: 'Sort by',
   gb: 'GB',
   status: { done: 'Done', failed: 'Failed', aborted: 'Stopped', stopping: 'Stopping…', running: 'running' },
   effort: { word: 'effort', isWordFirst: false, low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' },
@@ -114,18 +117,16 @@ const en: Strings = {
   hiddenTag: 'hidden',
   done: 'Done',
   upToDate: 'Up to date',
-  checkingUpdates: 'Checking for updates…',
   checkFailed: 'Update check failed',
   available: v => `v${v} available`,
   newVersion: v => `New version v${v}`,
   updating: v => `Updating to v${v}…`,
-  installedReloading: v => `v${v} installed · reloading…`,
-  installedRestart: v => `v${v} installed · restart Claude Code`,
+  installed: v => `v${v} installed`,
+  nextConversation: 'Takes effect in your next conversation',
+  ready: v => `v${v} ready`,
   githubAnswered: c => `GitHub answered ${c}`,
   noVersion: 'no version found on GitHub',
   compactFailed: m => `Compact failed: ${m}`,
-  updatedReloaded: 'Conso updated and reloaded',
-  updatedRestart: 'Conso updated: restart Claude Code to apply it',
   updateFailed: m => `Update failed: ${m}`,
   waiting: 'Waiting for the first reply…',
   nothingYet: 'Nothing to show yet',
@@ -159,6 +160,7 @@ const fr: Strings = {
   cores: n => `${n} cœurs`,
   na: 'indispo.',
   other: 'Autres',
+  sortBy: 'Trier par',
   gb: 'Go',
   status: { done: 'Terminé', failed: 'Échec', aborted: 'Arrêté', stopping: 'Arrêt…', running: 'en cours' },
   effort: { word: 'Effort', isWordFirst: true, low: 'faible', medium: 'moyen', high: 'élevé', xhigh: 'très élevé', max: 'max' },
@@ -177,18 +179,16 @@ const fr: Strings = {
   hiddenTag: 'masquée',
   done: 'Terminé',
   upToDate: 'À jour',
-  checkingUpdates: 'Recherche de mises à jour…',
   checkFailed: 'Échec de la vérification',
   available: v => `v${v} disponible`,
   newVersion: v => `Nouvelle version v${v}`,
   updating: v => `Mise à jour vers v${v}…`,
-  installedReloading: v => `v${v} installée · rechargement…`,
-  installedRestart: v => `v${v} installée · redémarrez Claude Code`,
+  installed: v => `v${v} installée`,
+  nextConversation: 'Active dès votre prochaine conversation',
+  ready: v => `v${v} prête`,
   githubAnswered: c => `GitHub a répondu ${c}`,
   noVersion: 'aucune version trouvée sur GitHub',
   compactFailed: m => `Échec du compactage : ${m}`,
-  updatedReloaded: 'Conso mis à jour et rechargé',
-  updatedRestart: "Conso mis à jour : redémarrez Claude Code pour l'appliquer",
   updateFailed: m => `Échec de la mise à jour : ${m}`,
   waiting: 'En attente de la première réponse…',
   nothingYet: 'Rien à afficher pour le moment',
@@ -222,6 +222,7 @@ const es: Strings = {
   cores: n => `${n} núcleos`,
   na: 'n/d',
   other: 'Otros',
+  sortBy: 'Ordenar por',
   gb: 'GB',
   status: { done: 'Hecho', failed: 'Error', aborted: 'Detenido', stopping: 'Deteniendo…', running: 'en curso' },
   effort: { word: 'Esfuerzo', isWordFirst: true, low: 'bajo', medium: 'medio', high: 'alto', xhigh: 'muy alto', max: 'máximo' },
@@ -240,18 +241,16 @@ const es: Strings = {
   hiddenTag: 'oculta',
   done: 'Listo',
   upToDate: 'Actualizado',
-  checkingUpdates: 'Buscando actualizaciones…',
   checkFailed: 'Error al buscar actualizaciones',
   available: v => `v${v} disponible`,
   newVersion: v => `Nueva versión v${v}`,
   updating: v => `Actualizando a v${v}…`,
-  installedReloading: v => `v${v} instalada · recargando…`,
-  installedRestart: v => `v${v} instalada · reinicia Claude Code`,
+  installed: v => `v${v} instalada`,
+  nextConversation: 'Activa desde tu próxima conversación',
+  ready: v => `v${v} lista`,
   githubAnswered: c => `GitHub respondió ${c}`,
   noVersion: 'no se encontró ninguna versión en GitHub',
   compactFailed: m => `Error al compactar: ${m}`,
-  updatedReloaded: 'Conso actualizado y recargado',
-  updatedRestart: 'Conso actualizado: reinicia Claude Code para aplicarlo',
   updateFailed: m => `Error al actualizar: ${m}`,
   waiting: 'Esperando la primera respuesta…',
   nothingYet: 'Nada que mostrar todavía',
@@ -285,6 +284,7 @@ const de: Strings = {
   cores: n => `${n} Kerne`,
   na: 'k. A.',
   other: 'Andere',
+  sortBy: 'Sortieren nach',
   gb: 'GB',
   status: { done: 'Fertig', failed: 'Fehler', aborted: 'Gestoppt', stopping: 'Wird gestoppt…', running: 'aktiv' },
   effort: { word: 'Aufwand', isWordFirst: true, low: 'niedrig', medium: 'mittel', high: 'hoch', xhigh: 'sehr hoch', max: 'maximal' },
@@ -303,18 +303,16 @@ const de: Strings = {
   hiddenTag: 'ausgeblendet',
   done: 'Fertig',
   upToDate: 'Aktuell',
-  checkingUpdates: 'Suche nach Updates…',
   checkFailed: 'Update-Prüfung fehlgeschlagen',
   available: v => `v${v} verfügbar`,
   newVersion: v => `Neue Version v${v}`,
   updating: v => `Aktualisierung auf v${v}…`,
-  installedReloading: v => `v${v} installiert · wird neu geladen…`,
-  installedRestart: v => `v${v} installiert · Claude Code neu starten`,
+  installed: v => `v${v} installiert`,
+  nextConversation: 'Aktiv ab dem nächsten Gespräch',
+  ready: v => `v${v} bereit`,
   githubAnswered: c => `GitHub antwortete ${c}`,
   noVersion: 'keine Version auf GitHub gefunden',
   compactFailed: m => `Komprimieren fehlgeschlagen: ${m}`,
-  updatedReloaded: 'Conso aktualisiert und neu geladen',
-  updatedRestart: 'Conso aktualisiert: Claude Code neu starten, um es anzuwenden',
   updateFailed: m => `Aktualisierung fehlgeschlagen: ${m}`,
   waiting: 'Warte auf die erste Antwort…',
   nothingYet: 'Noch nichts anzuzeigen',
@@ -348,6 +346,7 @@ const it: Strings = {
   cores: n => `${n} core`,
   na: 'n/d',
   other: 'Altri',
+  sortBy: 'Ordina per',
   gb: 'GB',
   status: { done: 'Fatto', failed: 'Errore', aborted: 'Fermato', stopping: 'Arresto…', running: 'in corso' },
   effort: { word: 'Sforzo', isWordFirst: true, low: 'basso', medium: 'medio', high: 'alto', xhigh: 'molto alto', max: 'massimo' },
@@ -366,18 +365,16 @@ const it: Strings = {
   hiddenTag: 'nascosta',
   done: 'Fine',
   upToDate: 'Aggiornato',
-  checkingUpdates: 'Ricerca aggiornamenti…',
   checkFailed: 'Verifica aggiornamenti non riuscita',
   available: v => `v${v} disponibile`,
   newVersion: v => `Nuova versione v${v}`,
   updating: v => `Aggiornamento a v${v}…`,
-  installedReloading: v => `v${v} installata · ricaricamento…`,
-  installedRestart: v => `v${v} installata · riavvia Claude Code`,
+  installed: v => `v${v} installata`,
+  nextConversation: 'Attiva dalla prossima conversazione',
+  ready: v => `v${v} pronta`,
   githubAnswered: c => `GitHub ha risposto ${c}`,
   noVersion: 'nessuna versione trovata su GitHub',
   compactFailed: m => `Compattazione non riuscita: ${m}`,
-  updatedReloaded: 'Conso aggiornato e ricaricato',
-  updatedRestart: 'Conso aggiornato: riavvia Claude Code per applicarlo',
   updateFailed: m => `Aggiornamento non riuscito: ${m}`,
   waiting: 'In attesa della prima risposta…',
   nothingYet: 'Ancora niente da mostrare',
@@ -411,6 +408,7 @@ const pt: Strings = {
   cores: n => `${n} núcleos`,
   na: 'n/d',
   other: 'Outros',
+  sortBy: 'Ordenar por',
   gb: 'GB',
   status: { done: 'Concluído', failed: 'Falhou', aborted: 'Parado', stopping: 'Parando…', running: 'em execução' },
   effort: { word: 'Esforço', isWordFirst: true, low: 'baixo', medium: 'médio', high: 'alto', xhigh: 'muito alto', max: 'máximo' },
@@ -429,18 +427,16 @@ const pt: Strings = {
   hiddenTag: 'oculto',
   done: 'Concluído',
   upToDate: 'Atualizado',
-  checkingUpdates: 'Verificando atualizações…',
   checkFailed: 'Falha ao verificar atualizações',
   available: v => `v${v} disponível`,
   newVersion: v => `Nova versão v${v}`,
   updating: v => `Atualizando para v${v}…`,
-  installedReloading: v => `v${v} instalada · recarregando…`,
-  installedRestart: v => `v${v} instalada · reinicie o Claude Code`,
+  installed: v => `v${v} instalada`,
+  nextConversation: 'Ativa a partir da próxima conversa',
+  ready: v => `v${v} pronta`,
   githubAnswered: c => `GitHub respondeu ${c}`,
   noVersion: 'nenhuma versão encontrada no GitHub',
   compactFailed: m => `Falha ao compactar: ${m}`,
-  updatedReloaded: 'Conso atualizado e recarregado',
-  updatedRestart: 'Conso atualizado: reinicie o Claude Code para aplicar',
   updateFailed: m => `Falha na atualização: ${m}`,
   waiting: 'Aguardando a primeira resposta…',
   nothingYet: 'Nada para mostrar ainda',
