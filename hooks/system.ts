@@ -22,9 +22,10 @@ export type Proc = { pid: string; cpu?: number; ram: number; app: string }
 // in nanoseconds
 export type GpuClient = { pid: string; time: number }
 
-// One reading: the machine's figures, its processes, and on macOS each GPU
-// client by its id, to compare with the next reading
-export type Reading = { stats: SystemStats; procs: Proc[]; gpuTimes?: Map<string, GpuClient> }
+// One reading: the machine's figures, its processes, on macOS each GPU client
+// by its id, to compare with the next reading, and on Windows each process's
+// GPU share as the system measured it
+export type Reading = { stats: SystemStats; procs: Proc[]; gpuTimes?: Map<string, GpuClient>; gpuByPid?: Map<string, number> }
 
 // The app a process belongs to: the outermost .app bundle in its path (an
 // app's helpers count as the app), the system's own processes as "macOS"
@@ -134,34 +135,55 @@ export const parseLinux = (out: string): Reading => {
   }
 }
 
-// Windows: the processors' load, free memory, the 3D engines' utilization,
-// and each app's memory
+// Windows: the processors' load, free memory, the 3D engines' utilization by
+// process, and each process's memory and CPU. A process's CPU is its processor
+// time gained over the second the GPU counters take to sample (one second at
+// least), what Task Manager shows; its time so far alone would be a lifetime
+// average. Idle (Id 0) is the processors' idle time, not an app
 export const WINDOWS =
   "$c=(Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average; " +
   '$o=Get-CimInstance Win32_OperatingSystem; ' +
   '$n=(Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors; ' +
-  "$g=try{((Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' -ErrorAction Stop).CounterSamples | Measure-Object -Property CookedValue -Sum).Sum}catch{''}; " +
-  "$p=(Get-Process | Group-Object ProcessName | ForEach-Object { $_.Name + '=' + ($_.Group | Measure-Object WorkingSet64 -Sum).Sum }) -join ';'; " +
-  '"$c|$($o.TotalVisibleMemorySize)|$($o.FreePhysicalMemory)|$n|$g|$p"'
+  '$w=[Diagnostics.Stopwatch]::StartNew(); $a=@{}; Get-Process | ForEach-Object { $a[$_.Id]=$_.CPU }; ' +
+  "$s=try{(Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' -ErrorAction Stop).CounterSamples}catch{$null}; " +
+  "$g=if($s){($s | Measure-Object -Property CookedValue -Sum).Sum}else{''}; " +
+  "$q=($s | ForEach-Object { if($_.CookedValue -gt 0 -and $_.InstanceName -match 'pid_(\\d+)_'){ \"$($matches[1])=$($_.CookedValue)\" } }) -join ';'; " +
+  '$r=1000-$w.ElapsedMilliseconds; if($r -gt 0){ Start-Sleep -Milliseconds $r }; $d=$w.Elapsed.TotalSeconds; ' +
+  "$p=(Get-Process | Where-Object Id -ne 0 | ForEach-Object { \"$($_.Id),$($_.ProcessName),$($_.CPU - $a[$_.Id]),$($_.WorkingSet64)\" }) -join ';'; " +
+  '"$c|$($o.TotalVisibleMemorySize)|$($o.FreePhysicalMemory)|$n|$g|$d|$p|$q"'
 
 export const parseWindows = (out: string): Reading => {
-  const [cpu, total, free, cores, gpu, apps = ''] = out.trim().split('|')
+  const [cpu, total, free, cores, gpu, span, apps = '', gpuApps = ''] = out.trim().split('|')
   const t = num(total)
   const f = num(free)
+  const dt = num(span)
+  // Id,name,processor seconds gained,memory in bytes: a name may hold a comma
   const procs = apps
     .split(';')
-    .map(entry => /^(.+)=(\d+)$/.exec(entry.trim()))
+    .map(entry => /^(\d+),(.+),([^,]*),(\d+)$/.exec(entry.trim()))
     .filter((m): m is RegExpExecArray => m !== null)
-    .map((m, i) => ({ pid: `w${i}`, ram: Number(m[2]) / GIB, app: m[1]! }))
+    .map(m => {
+      const gained = num(m[3]) ?? 0
+      return { pid: m[1]!, cpu: dt ? (Math.max(0, gained) / dt) * 100 : undefined, ram: Number(m[4]) / GIB, app: m[2]! }
+    })
+  // The GPU's share by process: every 3D engine it used, added up
+  const gpuByPid = new Map<string, number>()
+  for (const entry of gpuApps.split(';')) {
+    const m = /^(\d+)=(.+)$/.exec(entry.trim())
+    const v = num(m?.[2])
+    if (m && v !== undefined) gpuByPid.set(m[1]!, (gpuByPid.get(m[1]!) ?? 0) + v)
+  }
+  const hasGpu = Boolean(gpu?.trim())
   return {
     stats: {
       cpu: pct(num(cpu)),
-      gpu: gpu?.trim() ? pct(num(gpu.trim())) : undefined,
+      gpu: hasGpu ? pct(num(gpu!.trim())) : undefined,
       ramUsed: t !== undefined && f !== undefined ? ((t - f) * 1024) / GIB : undefined,
       ramTotal: t !== undefined ? (t * 1024) / GIB : undefined,
       cores: num(cores) || undefined,
     },
     procs,
+    gpuByPid: hasGpu ? gpuByPid : undefined,
   }
 }
 

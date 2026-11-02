@@ -161,6 +161,47 @@ test('Stop blocks the agent\'s tools', async ($, on) => {
   expect(ran).toBe(0)
 })
 
+// The Button keyed `key` in a drawn tree, as the app receives it
+const buttonIn = (node: unknown, key: string): unknown => {
+  if (typeof node !== 'object' || node === null) return undefined
+  const n = node as { type?: string; props?: { key?: string }; children?: unknown[] }
+  if (n.type === 'Button' && n.props?.key === key) return n
+  for (const child of n.children ?? []) {
+    const found = buttonIn(child, key)
+    if (found) return found
+  }
+  return undefined
+}
+
+test('a button keeps its number from one drawing to the next, and Clear clears', async ($, on) => {
+  let runs: unknown = [
+    { id: 'r', isLinked: true, usd: 0.02, description: 'Long', type: 'Explore', model: 'claude-opus-5-5', status: 'running', startedAt: 0, steps: 1, outputTokens: 10 },
+    { id: 'x', isLinked: true, usd: 0.01, description: 'Fini', type: 'Explore', model: 'claude-haiku-5-5', status: 'done', startedAt: 0, endedAt: 1000, steps: 1, outputTokens: 10 },
+  ]
+  let version = 1
+  on('state.get', (_: unknown, e: { key: string }, next: (e: unknown) => unknown) =>
+    e.key === 'agentRuns' ? { value: { value: runs, version } } : next(e),
+  )
+  on('state.set', (_: unknown, e: { key: string; value: unknown }, next: (e: unknown) => unknown) => {
+    if (e.key !== 'agentRuns') return next(e)
+    runs = e.value
+    version += 1
+    return { value: { isSet: true, version } }
+  })
+  on('tool.call', () => ({ result: {} }))
+  await setup($, on)
+  const ui = await $.ui.mount(PANE)
+  const before = JSON.stringify(buttonIn(await ui.drawn(), 'clear'))
+  // Drawn twice again, the second time as at first
+  await ui.press({ key: 'customize' })
+  await ui.press({ key: 'customize' })
+  const after = JSON.stringify(buttonIn(await ui.drawn(), 'clear'))
+  expect(after).toBe(before)
+  await ui.press({ key: 'clear' })
+  expect((runs as { id: string }[]).map(a => a.id)).toEqual(['r'])
+  await ui.unmount()
+})
+
 test('a new session shows the last limits reading', async ($, on) => {
   const now = Date.parse('2026-11-01T00:00:00Z')
   mock.clock(on, { now })
@@ -632,13 +673,24 @@ test('Linux without a GPU tool: no GPU figure', () => {
   expect(s.gpu).toBe(undefined)
 })
 
-test('Windows: load, memory, the 3D engines and each app\'s memory', () => {
-  const { stats: s, procs } = parseWindows('12|16777216|8388608|12|33.5|chrome=2147483648;Code=1073741824\r\n')
+test('Windows: load, memory, the 3D engines, and each app\'s CPU, GPU and memory', () => {
+  // Over 1.25 s: chrome gained 0.5 s of processor time (40% of one core), the
+  // GPU counters gave pid 11 two engines; a name may hold a comma
+  const { stats: s, procs, gpuByPid } = parseWindows(
+    '12|16777216|8388608|12|33.5|1.25|11,chrome,0.5,2147483648;12,Code,0,1073741824;13,My, App,,1073741824|11=20.5;11=3;12=1E-05\r\n',
+  )
   expect(s.cpu).toBe(12)
   expect(s.gpu).toBe(33.5)
   expect(s.ramUsed).toBe(8)
   expect(s.ramTotal).toBe(16)
-  expect(procs.map(p => [p.app, p.ram])).toEqual([['chrome', 2], ['Code', 1]])
+  expect(procs.map(p => [p.app, p.cpu, p.ram])).toEqual([['chrome', 40, 2], ['Code', 0, 1], ['My, App', 0, 1]])
+  expect([...(gpuByPid ?? [])]).toEqual([['11', 23.5], ['12', 1e-5]])
+  const apps = topApps(procs, s, gpuByPid)
+  expect(apps[0]).toMatchObject({ name: 'chrome', gpu: 23.5, ram: 2 })
+  // 40% of one core out of 12
+  expect(Math.round(apps[0]!.cpu! * 100) / 100).toBe(3.33)
+  // No GPU counters on this machine: no GPU column
+  expect(parseWindows('12|16777216|8388608|12||1|11,chrome,0.5,2147483648|').gpuByPid).toBeUndefined()
 })
 
 const mockMac = (on: any, gpu: () => number) => {

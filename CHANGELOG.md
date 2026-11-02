@@ -2,6 +2,15 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.27.0] - 2026-11-02
+
+### Added
+- **CPU and GPU by app on Windows.** The System table now fills every column on Windows too: each app's CPU over the last second, as Task Manager shows it, and its share of the 3D engines. Click CPU, GPU or RAM to rank the apps by it, as on macOS.
+
+### Fixed
+- **Buttons no longer blink under the pointer.** While an agent runs, the panel is drawn again every second, and each button used to be drawn anew with it, so its highlight flickered. A button now stays the same from one drawing to the next.
+- **Clear, Stop and every other button answer every click.** A click that landed during a redraw could be lost, most often with several agents at work. It now always goes through.
+
 ## [0.26.3] - 2026-11-02
 
 ### Changed

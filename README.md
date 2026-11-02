@@ -185,13 +185,13 @@ No. The conversation's replies never pass through Conso: it only follows agents'
 <details>
 <summary><b>Why is there no GPU figure?</b></summary>
 <br>
-On macOS, Conso measures the GPU over the seconds between two readings, from the time each app spent on it (Apple silicon), so a game drawing in bursts never reads 0% by chance. On Linux, it needs an NVIDIA card with <code>nvidia-smi</code>. On Windows, it reads the 3D engines' load. Where none of these is available, the gauge shows n/a.
+On macOS, Conso measures the GPU over the seconds between two readings, from the time each app spent on it (Apple silicon), so a game drawing in bursts never reads 0% by chance. On Linux, it needs an NVIDIA card with <code>nvidia-smi</code>. On Windows, it reads the 3D engines' load, app by app, as Task Manager does. Where none of these is available, the gauge shows n/a.
 </details>
 
 <details>
 <summary><b>Which apps does the System card list?</b></summary>
 <br>
-The four using the most CPU, GPU and memory together, the rest grouped as Other. Click the table's **CPU**, **GPU** or **RAM** header to list the four using the most of that one instead; click it again to go back. An app's helper processes count as the app, and the system's own processes as macOS. On macOS, every column is filled. On Linux and Windows, the system does not give a reliable load per app, so apps are ranked and shown by memory.
+The four using the most CPU, GPU and memory together, the rest grouped as Other. Click the table's **CPU**, **GPU** or **RAM** header to list the four using the most of that one instead; click it again to go back. An app's helper processes count as the app, and the system's own processes as macOS. On macOS and Windows, every column is filled. On Linux, the system does not give a reliable load per app, so apps are ranked and shown by memory.
 </details>
 
 <details>
