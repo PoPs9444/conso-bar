@@ -2,6 +2,11 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.28.1] - 2026-11-02
+
+### Added
+- **Your graphics card's name on Windows**, under the GPU ring, as macOS shows the chip's: *RTX 3080*, *RX 7900 XTX*, *Arc A770*. With several cards, the dedicated one is named, never a virtual display adapter. On Linux, the name is shortened the same way.
+
 ## [0.28.0] - 2026-11-02
 
 ### Fixed

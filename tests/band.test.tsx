@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { VERSION } from '../hooks/register'
-import { appOf, keepColors, parseGpuClients, parseLinux, parseMac, parseWindows, topApps } from '../hooks/system'
+import { appOf, gpuShort, keepColors, parseGpuClients, parseLinux, parseMac, parseWindows, pickGpu, topApps } from '../hooks/system'
 
 const USAGE = {
   startedAt: 0,
@@ -704,7 +704,7 @@ MemAvailable:    4096000 kB
   // 100 busy ticks out of 200
   expect(s.cpu).toBe(50)
   expect(s.gpu).toBe(37)
-  expect(s.gpuName).toBe('GeForce RTX 4070')
+  expect(s.gpuName).toBe('RTX 4070')
   expect(Math.round(s.ramUsed! * 10) / 10).toBe(11.7)
   expect(s.cores).toBe(8)
   // ps's %cpu on Linux is an average since start: memory only
@@ -732,8 +732,26 @@ test('Windows: load, memory, the 3D engines, and each app\'s CPU, GPU and memory
   expect(apps[0]).toMatchObject({ name: 'chrome', gpu: 23.5, ram: 2 })
   // 40% of one core out of 12
   expect(Math.round(apps[0]!.cpu! * 100) / 100).toBe(3.33)
+  // The card's name, from the last field
+  expect(parseWindows('12|16777216|8388608|12|33.5|1|11,chrome,0.5,2147483648||Intel(R) UHD Graphics 770;NVIDIA GeForce RTX 3080').stats.gpuName).toBe('RTX 3080')
   // No GPU counters on this machine: no GPU column
   expect(parseWindows('12|16777216|8388608|12||1|11,chrome,0.5,2147483648|').gpuByPid).toBeUndefined()
+})
+
+test('a graphics card goes by the name people use, the dedicated one first', () => {
+  expect(gpuShort('NVIDIA GeForce RTX 3080')).toBe('RTX 3080')
+  expect(gpuShort('NVIDIA GeForce RTX 4090 Laptop GPU')).toBe('RTX 4090 Laptop')
+  expect(gpuShort('NVIDIA RTX A4000')).toBe('RTX A4000')
+  expect(gpuShort('AMD Radeon RX 6800 XT')).toBe('RX 6800 XT')
+  expect(gpuShort('AMD Radeon(TM) Graphics')).toBe('Radeon Graphics')
+  expect(gpuShort('AMD Radeon 780M Graphics')).toBe('Radeon 780M')
+  expect(gpuShort('Intel(R) Arc(TM) A770 Graphics')).toBe('Arc A770')
+  expect(gpuShort('Intel(R) Iris(R) Xe Graphics')).toBe('Iris Xe Graphics')
+  expect(gpuShort('Apple M4 Max')).toBe('M4 Max')
+  expect(pickGpu(['Parsec Virtual Display Adapter', 'AMD Radeon(TM) Graphics', 'NVIDIA GeForce RTX 3080'])).toBe('RTX 3080')
+  expect(pickGpu(['Intel(R) UHD Graphics 770', 'AMD Radeon RX 7900 XTX'])).toBe('RX 7900 XTX')
+  expect(pickGpu(['Microsoft Basic Display Adapter'])).toBeUndefined()
+  expect(pickGpu([''])).toBeUndefined()
 })
 
 const mockMac = (on: any, gpu: () => number) => {

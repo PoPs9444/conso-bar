@@ -15,7 +15,7 @@ import type { GpuClient, Platform, Proc, Reading } from './system'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.28.0'
+export const VERSION = '0.28.1'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
