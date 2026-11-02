@@ -77,6 +77,8 @@ declare module 'claude-code' {
       snapshot: Snapshot | null
       isCompacting: boolean
       agentRuns: AgentRun[]
+      // the agents as the card last drew them: details catch up every 5 seconds
+      agentView: AgentRun[] | null
       tick: number
       history: Day[]
       update: UpdateState

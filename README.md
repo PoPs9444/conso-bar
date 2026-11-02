@@ -133,7 +133,7 @@ Missing yours? [Adding a language](CONTRIBUTING.md#adding-a-language) takes one 
 
 <img src="docs/update.svg" alt="The &quot;New version · Update&quot; line: click it to update" width="372">
 
-A few seconds after a session starts, then every 6 hours, Conso checks this repository for a newer version. When there is one, a line appears at the top of the panel: **New version v… · Update**. Click it and Conso installs the new version in the background with Claude Code's own commands, a small wheel turning meanwhile. Nothing is posted in your conversation and nothing reloads under it: the new version takes effect in your next conversation.
+A few seconds after a session starts, then every 6 hours, Conso checks this repository for a newer version. When there is one, a line appears at the top of the panel: **New version v… · Update**. Click it and Conso installs the new version in the background with Claude Code's own commands, a small wheel turning meanwhile. It finds Claude Code's command line by itself, the copy inside the desktop app included, so no `claude` command is needed in your terminal. Nothing is posted in your conversation and nothing reloads under it: the new version takes effect in your next conversation.
 
 The bottom of the panel shows your version with a status dot (green: up to date or installed, blue: new version, red: the check failed) and a permanent **Check for updates** button; while it checks, a small wheel turns.
 
@@ -191,13 +191,19 @@ On macOS, Conso measures the GPU over the seconds between two readings, from the
 <details>
 <summary><b>Which apps does the System card list?</b></summary>
 <br>
-The four using the most CPU, GPU and memory together, the rest grouped as Other. Click the table's **CPU**, **GPU** or **RAM** header to list the four using the most of that one instead; click it again to go back. An app's helper processes count as the app, and the system's own processes as macOS. On macOS and Windows, every column is filled. On Linux, the system does not give a reliable load per app, so apps are ranked and shown by memory.
+The four using the most CPU, GPU and memory together, the rest grouped as Other. Other always comes last: it is everything else on the machine, so it can weigh more than the apps above it. Click the table's **CPU**, **GPU** or **RAM** header to list the four using the most of that one instead; click it again to go back. An app's helper processes count as the app, and the system's own processes as macOS. On macOS and Windows, every column is filled. On Linux, the system does not give a reliable load per app, so apps are ranked and shown by memory.
 </details>
 
 <details>
 <summary><b>The panel does not appear.</b></summary>
 <br>
 Check that the plugin is enabled with <code>claude plugin list</code>, restart Claude Code, then type <code>/conso</code>.
+</details>
+
+<details>
+<summary><b>The update does not install.</b></summary>
+<br>
+Since 0.28.0, Conso finds Claude Code's command line by itself. An older version needs a <code>claude</code> command in your terminal: without one, update it once by hand, and every later update is one click. In a terminal, run the two commands of <a href="#updates">Updates</a>. With the desktop app only, type these in a conversation, one at a time: <code>/plugin marketplace update conso-bar</code>, then <code>/plugin uninstall conso-bar@conso-bar</code>, then <code>/plugin install conso-bar@conso-bar</code>, and pick the <b>user</b> scope.
 </details>
 
 <details>

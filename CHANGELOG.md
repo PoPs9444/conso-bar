@@ -2,6 +2,13 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.28.0] - 2026-11-02
+
+### Fixed
+- **Buttons no longer flicker every second while agents run.** The desktop app draws the whole panel again at each change, and a button under the pointer lost its highlight for an instant. An agent's time now counts on inside its own drawing, and its tools, steps and tokens catch up every 5 seconds, together with the System card. An agent that starts, ends or stops still shows at once.
+- **Sorting the apps takes effect at once, on Windows too.** Picking CPU, GPU or RAM ranks the apps again from the last reading right away: the apps that use the most of that column come in without waiting for the next reading, which takes several seconds on Windows.
+- **Updates no longer need a `claude` command.** Conso finds Claude Code's command line by itself: the copy inside the desktop app, the one on the PATH, or the usual install folder, on macOS, Linux and Windows. Someone with only the desktop app, or an old `claude` on the PATH, now updates in one click. If none is found, the panel says so.
+
 ## [0.27.0] - 2026-11-02
 
 ### Added
