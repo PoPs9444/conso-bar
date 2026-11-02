@@ -1,4 +1,4 @@
-import type { Day, Limit, Snapshot, SystemStats } from '../types'
+import type { AppLoad, Day, Limit, Snapshot, SystemStats } from '../types'
 
 import type { Strings } from './i18n'
 
@@ -132,10 +132,10 @@ export const fadeRight = (h: number, reserve: number, body: string) => {
 const SCALE = [0, 25, 50, 65, 80, 90, 100]
   .map(p => `<stop offset="${p}%" stop-color="${heat(p)}"/>`)
   .join('')
-const bar = (y: number, p: number) =>
+const bar = (y: number, p: number, h = 6) =>
   `<defs><linearGradient id="heatbar" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100%" y2="0">${SCALE}</linearGradient></defs>` +
-  `<rect class="trackfill" x="0" y="${y}" width="100%" height="6" rx="3"/>` +
-  (p > 0 ? `<rect fill="url(#heatbar)" x="0" y="${y}" width="${Math.max(1.5, Math.min(100, p)).toFixed(1)}%" height="6" rx="3"/>` : '')
+  `<rect class="trackfill" x="0" y="${y}" width="100%" height="${h}" rx="${h / 2}"/>` +
+  (p > 0 ? `<rect fill="url(#heatbar)" x="0" y="${y}" width="${Math.max(1.5, Math.min(100, p)).toFixed(1)}%" height="${h}" rx="${h / 2}"/>` : '')
 
 const ring = (cx: number, cy: number, r: number, p: number, color: string) => {
   const c = 2 * Math.PI * r
@@ -281,20 +281,55 @@ export const limitCards = (s: Snapshot, now: number, t: Strings) => {
   return cards
 }
 
-// The machine's load: three gauges side by side (CPU, GPU, memory), each centered
-// in its third of the card, with its figure inside and a detail underneath
+// One color per app in the System card, in the order they hold, and a quieter
+// one for all the others. None of them is green-to-red, kept for the load itself
+export const APP_COLORS = ['#60a5fa', '#a78bfa', '#f472b6', '#2dd4bf']
+const OTHER_COLOR = '#7c7c84'
+
+// A ring cut into quarters, one per app, end to end from the top, with a thin
+// gap between them; what is left of the circle stays the bare track
+const quarters = (cx: number, cy: number, r: number, parts: { p: number; color: string }[]) => {
+  const c = 2 * Math.PI * r
+  const gap = parts.filter(x => x.p > 0).length > 1 ? 1.5 : 0
+  let at = 0
+  let out = `<circle class="track" cx="${cx}" cy="${cy}" r="${r}" stroke-width="7"/>`
+  for (const { p, color } of parts) {
+    const len = Math.min(c - at, (Math.max(0, p) / 100) * c)
+    if (len <= 0) continue
+    out +=
+      `<circle cx="${cx}" cy="${cy}" r="${r}" stroke="${color}" stroke-width="7" fill="none"` +
+      ` stroke-dasharray="${Math.max(0.6, len - gap).toFixed(2)} ${c.toFixed(2)}" stroke-dashoffset="${(-at).toFixed(2)}"` +
+      ` transform="rotate(-90 ${cx} ${cy})"/>`
+    at += len
+  }
+  return out
+}
+
+// System card: CPU, GPU and memory as three rings, each cut into the share of
+// the apps that use the most, then those apps in a table with their colors
 export const systemCard = (sys: SystemStats, t: Strings) => {
-  const H = 112
   // 50.8, 64, 128: a tenth only where there is one
   const gb = (n: number) => (n >= 100 ? String(Math.round(n)) : String(Math.round(n * 10) / 10))
+  const apps = sys.apps ?? []
   const ramPct = sys.ramUsed !== undefined && sys.ramTotal ? (sys.ramUsed / sys.ramTotal) * 100 : undefined
-  const gauge = (x: string, label: string, p: number | undefined, detail: string) => {
-    const color = p === undefined ? '#6e6e74' : heat(p)
+  const ramShare = (a: AppLoad) => (a.ram !== undefined && sys.ramTotal ? (a.ram / sys.ramTotal) * 100 : undefined)
+  const sum = (xs: (number | undefined)[]) => xs.reduce<number>((s, x) => s + (x ?? 0), 0)
+  // Each resource: its load, and each app's share when the system gives it
+  const resources = [
+    { label: 'CPU', p: sys.cpu, share: (a: AppLoad) => a.cpu },
+    { label: 'GPU', p: sys.gpu, share: (a: AppLoad) => a.gpu },
+    { label: 'RAM', p: ramPct, share: ramShare },
+  ].map(r => ({ ...r, isSplit: r.p !== undefined && apps.some(a => r.share(a) !== undefined) }))
+
+  const gauge = (x: string, r: (typeof resources)[number], detail: string) => {
+    const color = r.p === undefined ? '#6e6e74' : heat(r.p)
+    const parts = apps.map((a, i) => ({ p: r.share(a) ?? 0, color: APP_COLORS[i % APP_COLORS.length]! }))
+    const others = Math.max(0, (r.p ?? 0) - sum(parts.map(x => x.p)))
     return (
       `<svg x="${x}" y="0" width="1" height="1" overflow="visible">` +
-      ring(0, 52, 24, p ?? 0, color) +
-      `<text x="0" y="57" text-anchor="middle" font-size="13.5" font-weight="700" fill="${color}">${p === undefined ? '—' : esc(pct(p))}</text>` +
-      `<text class="t2" x="0" y="96" text-anchor="middle" font-size="11" font-weight="600" letter-spacing=".7">${esc(label)}</text>` +
+      (r.isSplit ? quarters(0, 52, 24, [...parts, { p: others, color: OTHER_COLOR }]) : ring(0, 52, 24, r.p ?? 0, color)) +
+      `<text x="0" y="57" text-anchor="middle" font-size="13.5" font-weight="700" fill="${color}">${r.p === undefined ? '—' : esc(pct(r.p))}</text>` +
+      `<text class="t2" x="0" y="96" text-anchor="middle" font-size="11" font-weight="600" letter-spacing=".7">${r.label}</text>` +
       `<text x="0" y="110" text-anchor="middle" font-size="10.5">${detail}</text>` +
       `</svg>`
     )
@@ -305,30 +340,84 @@ export const systemCard = (sys: SystemStats, t: Strings) => {
     sys.ramUsed !== undefined && sys.ramTotal
       ? `<tspan class="t1" font-weight="700">${esc(String(gb(sys.ramUsed)))}</tspan><tspan class="t3"> / ${esc(String(gb(sys.ramTotal)))} ${esc(t.gb)}</tspan>`
       : `<tspan class="t3">${esc(t.na)}</tspan>`
-  const svg = fluid(
-    H,
+  let body =
     title(0, 11, t.system.toUpperCase()) +
-      gauge('16.67%', 'CPU', sys.cpu, cpuDetail) +
-      gauge('50%', 'GPU', sys.gpu, gpuDetail) +
-      gauge('83.33%', 'RAM', ramPct, ramDetail),
-  )
+    gauge('16.67%', resources[0]!, cpuDetail) +
+    gauge('50%', resources[1]!, gpuDetail) +
+    gauge('83.33%', resources[2]!, ramDetail)
+
+  // The apps' table: a row per app with its color, then the others; a column
+  // per resource the system splits by app
+  let H = 112
+  if (apps.length) {
+    const COL = 52
+    const cols = resources.filter(r => r.isSplit)
+    const value = (label: string, v: number | undefined) =>
+      v === undefined ? '—' : label === 'RAM' ? `${gb(v)} ${t.gb}` : `${Math.round(v)}%`
+    const appValue = (r: (typeof cols)[number], a: AppLoad) => value(r.label, r.label === 'RAM' ? a.ram : r.share(a))
+    const otherValue = (r: (typeof cols)[number]) => {
+      if (r.label === 'RAM') return value('RAM', sys.ramUsed === undefined ? undefined : Math.max(0, sys.ramUsed - sum(apps.map(a => a.ram))))
+      return value(r.label, r.p === undefined ? undefined : Math.max(0, r.p - sum(apps.map(a => r.share(a)))))
+    }
+    const colX = (i: number) => -(cols.length - 1 - i) * COL
+    const rows = [
+      ...apps.map((a, i) => ({ name: a.name, color: APP_COLORS[i % APP_COLORS.length]!, isOther: false, cells: cols.map(r => appValue(r, a)) })),
+      { name: t.other, color: OTHER_COLOR, isOther: true, cells: cols.map(otherValue) },
+    ]
+    const y0 = 160
+    H = y0 + (rows.length - 1) * 18 + 6
+    body +=
+      `<rect class="trackfill" x="0" y="124" width="100%" height="1"/>` +
+      right(cols.map((r, i) => `<text class="t3" x="${colX(i)}" y="142" text-anchor="end" font-size="10" font-weight="600" letter-spacing=".6">${r.label}</text>`).join('')) +
+      fadeRight(
+        H,
+        (cols.length - 1) * COL + 52,
+        rows
+          .map((row, i) => `<text class="${row.isOther ? 't3' : 't1'}" x="14" y="${y0 + i * 18}" font-size="12">${esc(row.name)}</text>`)
+          .join(''),
+      ) +
+      rows.map((row, i) => `<circle cx="4" cy="${y0 + i * 18 - 4}" r="3.5" fill="${row.color}"/>`).join('') +
+      right(
+        rows
+          .map((row, i) =>
+            row.cells
+              .map((cell, j) => `<text class="${row.isOther ? 't3' : 't2'}" x="${colX(j)}" y="${y0 + i * 18}" text-anchor="end" font-size="11.5">${esc(cell)}</text>`)
+              .join(''),
+          )
+          .join(''),
+      )
+  }
+
   const figure = (p: number | undefined) => (p === undefined ? t.na : pct(p))
   const ram = sys.ramUsed !== undefined && sys.ramTotal ? `${gb(sys.ramUsed)} / ${gb(sys.ramTotal)} ${t.gb}` : t.na
-  return { svg, h: H, alt: `${t.system}: CPU ${figure(sys.cpu)}, GPU ${figure(sys.gpu)}, RAM ${ram}` }
+  const appsAlt = apps
+    .map(a =>
+      [a.cpu !== undefined && `CPU ${Math.round(a.cpu)}%`, a.gpu !== undefined && `GPU ${Math.round(a.gpu)}%`, a.ram !== undefined && `RAM ${gb(a.ram)} ${t.gb}`]
+        .filter(Boolean)
+        .join(', '),
+    )
+    .map((figures, i) => `${apps[i]!.name}: ${figures}`)
+    .join('; ')
+  return {
+    svg: fluid(H, body),
+    h: H,
+    alt: `${t.system}: CPU ${figure(sys.cpu)}, GPU ${figure(sys.gpu)}, RAM ${ram}${appsAlt ? `. ${appsAlt}` : ''}`,
+  }
 }
 
-// Context card content (the title and the Compact button sit above it)
+// Context card content (the title and the Compact button sit above it): the
+// percentage and the tokens on one line, the bar right under them
 export const contextCard = (s: Snapshot, t: Strings) => {
   if (s.tokens === undefined || s.window <= 0) return null
-  const H = 44
+  const H = 22
   const cp = (s.tokens / s.window) * 100
   const color = heat(cp)
   const tokenLabel = `${tokens(s.tokens)} / ${tokens(s.window)} ${t.tokens}`
   const svg = fluid(
     H,
-    fadeRight(32, Math.ceil(tokenLabel.length * 6.6) + 10, `<text x="0" y="24" font-size="22" font-weight="700" fill="${color}">${esc(num(cp, 1))}%</text>`) +
-      `<text x="100%" y="24" text-anchor="end" font-size="11.5"><tspan font-weight="700" fill="${color}">${esc(tokens(s.tokens))}</tspan><tspan class="t2"> / ${esc(tokens(s.window))}</tspan><tspan class="t3"> ${esc(t.tokens)}</tspan></text>` +
-      bar(36, cp),
+    fadeRight(14, Math.ceil(tokenLabel.length * 6.6) + 10, `<text x="0" y="11" font-size="13" font-weight="700" fill="${color}">${esc(num(cp, 1))}%</text>`) +
+      `<text x="100%" y="11" text-anchor="end" font-size="11.5"><tspan font-weight="700" fill="${color}">${esc(tokens(s.tokens))}</tspan><tspan class="t2"> / ${esc(tokens(s.window))}</tspan><tspan class="t3"> ${esc(t.tokens)}</tspan></text>` +
+      bar(17, cp, 5),
   )
   // The title alone, drawn like the other cards' titles, as wide as its word
   const name = t.context.toUpperCase()

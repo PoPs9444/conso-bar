@@ -5,7 +5,7 @@
 # Conso
 
 **The usage panel for Claude Code.**<br>
-Rate limits, context, costs and live agents, right next to your conversation.
+Rate limits, context, costs, live agents and your machine's load, right next to your conversation.
 
 [![CI](https://github.com/PoPs9444/conso-bar/actions/workflows/ci.yml/badge.svg)](https://github.com/PoPs9444/conso-bar/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/PoPs9444/conso-bar?label=version&color=4ade80)](https://github.com/PoPs9444/conso-bar/releases)
@@ -17,7 +17,7 @@ Rate limits, context, costs and live agents, right next to your conversation.
 
 <br>
 
-<img src="docs/panel.svg" alt="The Conso panel: 5-hour and weekly limits, context, cost history and running agents" width="372">
+<img src="docs/panel.svg" alt="The Conso panel: system load by app, 5-hour and weekly limits, context, cost history and running agents" width="372">
 
 </div>
 
@@ -33,7 +33,7 @@ Claude Code's limits usually show up when you hit them. Conso keeps them in sigh
 | --- | --- |
 | **Limits at a glance** | Your 5-hour and weekly usage, the time until each resets, and a forecast at your average pace. |
 | **Context and Compact** | How full the context window is, and a **Compact** button that runs `/compact` for you. |
-| **Your machine** | CPU and GPU load and the memory in use, refreshed every few seconds. |
+| **Your machine** | CPU, GPU and memory, each cut into colored quarters for the apps using the most, refreshed every few seconds. |
 | **Cost history** | Today's cost and the last 7 days, across all your sessions. |
 | **Live agents** | Model, effort, duration, current tool, tokens and estimated cost for every agent. **Stop** ends one cleanly. |
 | **Your language** | English, French, Spanish, German, Italian or Portuguese, picked from Claude Code's own settings. |
@@ -69,14 +69,14 @@ Restart Claude Code. The **Conso** panel opens on the right at the start of ever
 
 | Card | What it shows |
 | --- | --- |
+| **System** | Three rings for CPU, GPU and memory in use, each cut into a colored quarter per app, and a table of the four apps using the most with their share of each. |
 | **5-hour limit** | Percentage used on a green-to-red gauge, time until the reset, and a forecast. |
 | **Weekly limit** | The same for the week, plus the cost of the current session. |
-| **Context** | Tokens used out of the window on a green-to-red gradient bar, and the **Compact** button. |
-| **System** | Three gauges: CPU, GPU and memory in use (with the GB used out of the GB installed). |
+| **Context** | Percentage and tokens used out of the window, a green-to-red gradient bar, and the **Compact** button. |
 | **History** | Today's cost and a bar for each of the last 7 days, from green for a light day to red for the heaviest. |
 | **Agents** | Every agent of the session, live. Running ones first. |
 
-Color is kept for the numbers that matter: percentages turn from green to red as they approach 100%, and each model family has its own color (Fable red, Opus violet, Sonnet blue, Haiku teal).
+Color is kept for the numbers that matter: percentages turn from green to red as they approach 100%, each model family has its own color (Fable red, Opus violet, Sonnet blue, Haiku teal), and each app in the System card keeps its color while it stays among the top four.
 
 In the terminal, Conso shows a compact bar above the prompt with the same figures.
 
@@ -134,7 +134,7 @@ claude plugin update conso-bar@conso-bar
 
 Conso sends nothing anywhere: everything is computed and stored on your machine. Its only network request reads the version number published in this repository, to offer updates.
 
-For the **System** card, it runs one short command every 5 seconds in the desktop app, using only what the system ships with: `iostat`, `ioreg`, `vm_stat` and `sysctl` on macOS, `/proc` (and `nvidia-smi` when present) on Linux, PowerShell every 10 seconds on Windows.
+For the **System** card, it runs one short command every 5 seconds in the desktop app, using only what the system ships with: `iostat`, `ioreg`, `vm_stat`, `sysctl` and `ps` on macOS, `/proc` and `ps` (and `nvidia-smi` when present) on Linux, PowerShell every 10 seconds on Windows. The names of the apps it lists never leave the panel.
 
 To pick its language, it reads Claude Code's `language` setting and, in the desktop app, the single `locale` key of the Claude app's settings file, extracted with the system's own `plutil` (macOS) or PowerShell (Windows), so nothing else in that file ever reaches Conso.
 
@@ -162,6 +162,12 @@ No. The conversation's replies never pass through Conso: it only follows agents'
 <summary><b>Why is there no GPU figure?</b></summary>
 <br>
 On macOS, Conso reads the GPU's own utilization (Apple silicon and most Intel Macs). On Linux, it needs an NVIDIA card with <code>nvidia-smi</code>. On Windows, it reads the 3D engines' load. Where none of these is available, the gauge shows n/a.
+</details>
+
+<details>
+<summary><b>Which apps does the System card list?</b></summary>
+<br>
+The four using the most CPU, GPU and memory together, the rest grouped as Other. An app's helper processes count as the app, and the system's own processes as macOS. On macOS, every column is filled. On Linux and Windows, the system does not give a reliable load per app, so apps are ranked and shown by memory.
 </details>
 
 <details>

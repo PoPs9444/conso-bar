@@ -27,6 +27,8 @@ export type Strings = {
   cores: (n: number) => string
   // a figure the machine does not give
   na: string
+  // the apps outside the top ones
+  other: string
   gb: string
   status: { done: string; failed: string; aborted: string; stopping: string; running: string }
   // the level takes the color, the word stays white; some languages put the word first
@@ -86,6 +88,7 @@ const en: Strings = {
   system: 'System',
   cores: n => `${n} cores`,
   na: 'n/a',
+  other: 'Other',
   gb: 'GB',
   status: { done: 'Done', failed: 'Failed', aborted: 'Stopped', stopping: 'Stopping…', running: 'running' },
   effort: { word: 'effort', isWordFirst: false, low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' },
@@ -144,6 +147,7 @@ const fr: Strings = {
   system: 'Système',
   cores: n => `${n} cœurs`,
   na: 'indispo.',
+  other: 'Autres',
   gb: 'Go',
   status: { done: 'Terminé', failed: 'Échec', aborted: 'Arrêté', stopping: 'Arrêt…', running: 'en cours' },
   effort: { word: 'Effort', isWordFirst: true, low: 'faible', medium: 'moyen', high: 'élevé', xhigh: 'très élevé', max: 'max' },
@@ -202,6 +206,7 @@ const es: Strings = {
   system: 'Sistema',
   cores: n => `${n} núcleos`,
   na: 'n/d',
+  other: 'Otros',
   gb: 'GB',
   status: { done: 'Hecho', failed: 'Error', aborted: 'Detenido', stopping: 'Deteniendo…', running: 'en curso' },
   effort: { word: 'Esfuerzo', isWordFirst: true, low: 'bajo', medium: 'medio', high: 'alto', xhigh: 'muy alto', max: 'máximo' },
@@ -260,6 +265,7 @@ const de: Strings = {
   system: 'System',
   cores: n => `${n} Kerne`,
   na: 'k. A.',
+  other: 'Andere',
   gb: 'GB',
   status: { done: 'Fertig', failed: 'Fehler', aborted: 'Gestoppt', stopping: 'Wird gestoppt…', running: 'aktiv' },
   effort: { word: 'Aufwand', isWordFirst: true, low: 'niedrig', medium: 'mittel', high: 'hoch', xhigh: 'sehr hoch', max: 'maximal' },
@@ -318,6 +324,7 @@ const it: Strings = {
   system: 'Sistema',
   cores: n => `${n} core`,
   na: 'n/d',
+  other: 'Altri',
   gb: 'GB',
   status: { done: 'Fatto', failed: 'Errore', aborted: 'Fermato', stopping: 'Arresto…', running: 'in corso' },
   effort: { word: 'Sforzo', isWordFirst: true, low: 'basso', medium: 'medio', high: 'alto', xhigh: 'molto alto', max: 'massimo' },
@@ -376,6 +383,7 @@ const pt: Strings = {
   system: 'Sistema',
   cores: n => `${n} núcleos`,
   na: 'n/d',
+  other: 'Outros',
   gb: 'GB',
   status: { done: 'Concluído', failed: 'Falhou', aborted: 'Parado', stopping: 'Parando…', running: 'em execução' },
   effort: { word: 'Esforço', isWordFirst: true, low: 'baixo', medium: 'médio', high: 'alto', xhigh: 'muito alto', max: 'máximo' },

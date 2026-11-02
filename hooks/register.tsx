@@ -9,13 +9,13 @@ import { HEX, contextCard, footerLine, heat, historyCard, left, limitCards, syst
 import { STRINGS, toLang } from './i18n'
 import type { Strings } from './i18n'
 import { costOf } from './pricing'
-import { LINUX, MAC, WINDOWS, parseLinux, parseMac, parseWindows } from './system'
-import type { Platform } from './system'
+import { LINUX, MAC, WINDOWS, keepPlaces, parseLinux, parseMac, parseWindows, topApps } from './system'
+import type { Platform, Reading } from './system'
 
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.23.0'
+export const VERSION = '0.24.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
@@ -24,7 +24,9 @@ const isCompacting = atom({ plugin: 'conso-bar', key: 'isCompacting' } as const,
 const agents = atom({ plugin: 'conso-bar', key: 'agentRuns' } as const, [])
 const tick = atom({ plugin: 'conso-bar', key: 'tick' } as const, 0)
 const history = atom({ plugin: 'conso-bar', key: 'history' } as const, [])
-const DEFAULT_ORDER: CardKey[] = ['limits', 'context', 'system', 'history', 'agents']
+const DEFAULT_ORDER: CardKey[] = ['system', 'limits', 'context', 'history', 'agents']
+// The default before 0.24.0: an order nobody changed moves System to the top
+const OLD_ORDER = ['limits', 'context', 'system', 'history', 'agents'].join()
 const order = atom({ plugin: 'conso-bar', key: 'order' } as const, DEFAULT_ORDER)
 const isCustomizing = atom({ plugin: 'conso-bar', key: 'isCustomizing' } as const, false)
 const updateState = atom({ plugin: 'conso-bar', key: 'update' } as const, { status: 'idle' } as UpdateState)
@@ -192,17 +194,34 @@ let langPoller: { cancel: () => void } | undefined
 let systemPoller: { cancel: () => void } | undefined
 let isReading = false
 let platform: Platform | undefined
+// Each process's GPU time at the last reading, to turn into a share of the interval
+let lastGpu: { at: number; times: Map<string, number> } | undefined
 
 // One reading of the machine's load; undefined when the machine would not say
-const readSystem = async ($: EngineInterface): Promise<SystemStats | undefined> => {
+const readSystem = async ($: EngineInterface): Promise<Reading | undefined> => {
   platform ??= (await $.env.get('APPDATA')) ? 'windows' : (await $.fs.exists('/proc/stat')) ? 'linux' : 'mac'
   const r =
     platform === 'windows'
       ? await $.process.run(['powershell', '-NoProfile', '-Command', WINDOWS], { timeoutMs: 8000 })
       : await $.process.run(['sh', '-c', platform === 'linux' ? LINUX : MAC], { timeoutMs: 8000 })
   if (r.exitCode !== 0 && !r.stdout.trim()) return undefined
-  const stats = platform === 'windows' ? parseWindows(r.stdout) : platform === 'linux' ? parseLinux(r.stdout) : parseMac(r.stdout)
-  return stats.cpu === undefined && stats.ramUsed === undefined ? undefined : stats
+  const reading = platform === 'windows' ? parseWindows(r.stdout) : platform === 'linux' ? parseLinux(r.stdout) : parseMac(r.stdout)
+  return reading.stats.cpu === undefined && reading.stats.ramUsed === undefined ? undefined : reading
+}
+
+// Each process's share of the GPU since the last reading, in percent: the GPU
+// time it gained over the time that passed. Nothing on the first reading
+const gpuShares = (times: Map<string, number> | undefined, at: number) => {
+  const before = lastGpu
+  lastGpu = times && { at, times }
+  if (!times || !before || at <= before.at) return undefined
+  const ns = (at - before.at) * 1e6
+  const shares = new Map<string, number>()
+  for (const [pid, t] of times) {
+    const gained = t - (before.times.get(pid) ?? 0)
+    if (gained > 0) shares.set(pid, Math.min(100, (gained / ns) * 100))
+  }
+  return shares
 }
 
 // One reading of the machine's load, kept as drawn (whole percents, tenths of
@@ -211,12 +230,26 @@ const pollSystem = async ($: EngineInterface) => {
   if (isReading) return
   isReading = true
   try {
-    const s = await readSystem($)
-    if (!s) return
+    const reading = await readSystem($)
+    if (!reading) return
+    const s = reading.stats
+    const shares = gpuShares(reading.gpuTimes, await $.clock.now())
     const whole = (n: number | undefined) => (n === undefined ? undefined : Math.round(n))
     const tenth = (n: number | undefined) => (n === undefined ? undefined : Math.round(n * 10) / 10)
-    const shown: SystemStats = { ...s, cpu: whole(s.cpu), gpu: whole(s.gpu), ramUsed: tenth(s.ramUsed), ramTotal: tenth(s.ramTotal) }
-    if (!same(await read($, system), shown)) await update($, system, () => shown)
+    const before = await read($, system)
+    const apps = keepPlaces(
+      before?.apps,
+      topApps(reading.procs, s, shares).map(a => ({ name: a.name, cpu: whole(a.cpu), gpu: whole(a.gpu), ram: tenth(a.ram) })),
+    )
+    const shown: SystemStats = {
+      ...s,
+      cpu: whole(s.cpu),
+      gpu: whole(s.gpu),
+      ramUsed: tenth(s.ramUsed),
+      ramTotal: tenth(s.ramTotal),
+      apps: apps.length ? apps : undefined,
+    }
+    if (!same(before, shown)) await update($, system, () => shown)
   } finally {
     isReading = false
   }
@@ -290,10 +323,10 @@ const runUpdate = async ($: EngineInterface) => {
 
 // ---- Card order, kept across sessions
 
-// A stored order missing a card (an older version) gets it back at the end
 // A stored order missing a card (an older version) gets it back right after the
 // card that comes before it by default
 const normalizeOrder = (stored: unknown): CardKey[] => {
+  if (Array.isArray(stored) && stored.join() === OLD_ORDER) return [...DEFAULT_ORDER]
   const known = Array.isArray(stored) ? stored.filter((k): k is CardKey => DEFAULT_ORDER.includes(k as CardKey)) : []
   const list = [...new Set(known)]
   DEFAULT_ORDER.forEach((k, i) => {
