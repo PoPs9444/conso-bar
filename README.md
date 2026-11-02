@@ -27,6 +27,31 @@ Rate limits, context, costs, live agents and your machine's load, right next to 
 
 Claude Code's limits usually show up when you hit them. Conso keeps them in sight: how much of your 5-hour and weekly allowance you have used, when you will run out at your current pace, how full the context is, and what every agent is doing and costing. One glance, no command to type.
 
+## A closer look
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <img src="docs/shot-system.svg" alt="The System card on an M4 Max: CPU, GPU and memory rings cut by app, and the apps ranked by GPU" width="372"><br>
+      <sub><b>Your machine, app by app.</b> Click CPU, GPU or RAM to rank the apps by it.</sub>
+    </td>
+    <td align="center" valign="top" width="50%">
+      <img src="docs/shot-limits.svg" alt="The Limits, Context and History cards" width="372"><br>
+      <sub><b>Limits, context and cost.</b> Both limits with their forecast, the context bar and the week's spend.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="docs/shot-agents.svg" alt="The Agents card with two running agents and a finished one" width="372"><br>
+      <sub><b>Live agents.</b> Model, effort, current tool, tokens and cost, with Stop at hand.</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/shot-customize.svg" alt="Customize mode: arrows to move each card, Hide and Show" width="372"><br>
+      <sub><b>Make it yours.</b> Move the cards, hide the ones you do not need.</sub>
+    </td>
+  </tr>
+</table>
+
 ## Features
 
 | Feature | What it does |
