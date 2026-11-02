@@ -67,6 +67,7 @@ export type Strings = {
   noClaude: string
   waiting: string
   nothingYet: string
+  drawFailed: (why: string) => string
   cards: Record<CardKey, string>
   command: string
   opened: string
@@ -129,6 +130,7 @@ const en: Strings = {
   noClaude: "Claude Code's command line was not found",
   waiting: 'Waiting for the first reply…',
   nothingYet: 'Nothing to show yet',
+  drawFailed: (why: string) => `Conso could not draw this panel: ${why}`,
   cards: { limits: 'Limits', context: 'Context', system: 'System', history: 'History', agents: 'Agents' },
   command: 'Show the Conso panel',
   opened: 'Conso panel opened.',
@@ -191,6 +193,7 @@ const fr: Strings = {
   noClaude: 'Ligne de commande de Claude Code introuvable',
   waiting: 'En attente de la première réponse…',
   nothingYet: 'Rien à afficher pour le moment',
+  drawFailed: (why: string) => `Conso n'a pas pu dessiner ce panneau : ${why}`,
   cards: { limits: 'Limites', context: 'Contexte', system: 'Système', history: 'Historique', agents: 'Agents' },
   command: 'Afficher le panneau Conso',
   opened: 'Panneau Conso ouvert.',
@@ -253,6 +256,7 @@ const es: Strings = {
   noClaude: 'No se encontró la línea de comandos de Claude Code',
   waiting: 'Esperando la primera respuesta…',
   nothingYet: 'Nada que mostrar todavía',
+  drawFailed: (why: string) => `Conso no pudo dibujar este panel: ${why}`,
   cards: { limits: 'Límites', context: 'Contexto', system: 'Sistema', history: 'Historial', agents: 'Agentes' },
   command: 'Mostrar el panel Conso',
   opened: 'Panel Conso abierto.',
@@ -315,6 +319,7 @@ const de: Strings = {
   noClaude: 'Kommandozeile von Claude Code nicht gefunden',
   waiting: 'Warte auf die erste Antwort…',
   nothingYet: 'Noch nichts anzuzeigen',
+  drawFailed: (why: string) => `Conso konnte dieses Panel nicht zeichnen: ${why}`,
   cards: { limits: 'Limits', context: 'Kontext', system: 'System', history: 'Verlauf', agents: 'Agenten' },
   command: 'Conso-Panel anzeigen',
   opened: 'Conso-Panel geöffnet.',
@@ -377,6 +382,7 @@ const it: Strings = {
   noClaude: 'Riga di comando di Claude Code non trovata',
   waiting: 'In attesa della prima risposta…',
   nothingYet: 'Ancora niente da mostrare',
+  drawFailed: (why: string) => `Conso non ha potuto disegnare questo pannello: ${why}`,
   cards: { limits: 'Limiti', context: 'Contesto', system: 'Sistema', history: 'Cronologia', agents: 'Agenti' },
   command: 'Mostra il pannello Conso',
   opened: 'Pannello Conso aperto.',
@@ -439,6 +445,7 @@ const pt: Strings = {
   noClaude: 'Linha de comando do Claude Code não encontrada',
   waiting: 'Aguardando a primeira resposta…',
   nothingYet: 'Nada para mostrar ainda',
+  drawFailed: (why: string) => `O Conso não conseguiu desenhar este painel: ${why}`,
   cards: { limits: 'Limites', context: 'Contexto', system: 'Sistema', history: 'Histórico', agents: 'Agentes' },
   command: 'Mostrar o painel Conso',
   opened: 'Painel Conso aberto.',
