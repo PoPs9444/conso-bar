@@ -2,6 +2,11 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.26.3] - 2026-11-02
+
+### Changed
+- Maintenance release: no change in behavior. It brings the one-click update line of 0.26.2 into play for everyone already on 0.26.2.
+
 ## [0.26.2] - 2026-11-02
 
 ### Changed
