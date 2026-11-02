@@ -47,6 +47,10 @@ export type UpdateState = {
 // The panel's blocks, in the order the person chose
 export type CardKey = 'limits' | 'context' | 'system' | 'history' | 'agents'
 
+// One app's share of the machine: CPU and GPU in percent of the whole, memory
+// in GB; a figure the system does not give per app is absent
+export type AppLoad = { name: string; cpu?: number; gpu?: number; ram?: number }
+
 // The machine's load at the last reading; a figure the machine would not give
 // is absent
 export type SystemStats = {
@@ -57,6 +61,8 @@ export type SystemStats = {
   ramUsed?: number
   ramTotal?: number
   cores?: number
+  // the biggest consumers, each keeping its place (and color) while it stays
+  apps?: AppLoad[]
 }
 
 // The languages the panel speaks; English unless Claude Code is set to another

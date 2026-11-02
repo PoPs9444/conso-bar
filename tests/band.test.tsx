@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { VERSION } from '../hooks/register'
-import { parseLinux, parseMac, parseWindows } from '../hooks/system'
+import { appOf, keepPlaces, parseGpuClients, parseLinux, parseMac, parseWindows, topApps } from '../hooks/system'
 
 const USAGE = {
   startedAt: 0,
@@ -243,12 +243,12 @@ test('Customize shows arrows and moving a card changes the order', async ($, on)
   await ui.unmount()
   const ui2 = await $.ui.mount(PANE)
   expect((await ui2.find({ key: 'customize' }))?.text).toBe('Done')
-  expect(await ui2.find({ key: 'up-limits' })).toBe(undefined)
-  await ui2.press({ key: 'down-limits' })
+  expect(await ui2.find({ key: 'up-system' })).toBe(undefined)
+  await ui2.press({ key: 'down-system' })
   await ui2.unmount()
   const ui3 = await $.ui.mount(PANE)
-  // Limits moved below Context: it now has an up arrow
-  expect((await ui3.find({ key: 'up-limits' }))?.text).toBe('↑')
+  // System moved below Limits: it now has an up arrow
+  expect((await ui3.find({ key: 'up-system' }))?.text).toBe('↑')
   await ui3.unmount()
 })
 
@@ -436,7 +436,7 @@ test('history bars go from green to red with what each day cost', async ($, on) 
   await ui.unmount()
 })
 
-// ---- System: CPU, GPU and memory
+// ---- System: CPU, GPU and memory, and the apps behind them
 
 // What the macOS command prints on an Apple M4 Max (trimmed)
 const MAC_OUT = ` 18  7 75  10.27 17.75 15.56
@@ -455,18 +455,71 @@ Pages occupied by compressor:                 899298.
 16
 `
 
+// The processes and the GPU's clients that follow it; `gpu` is Claude's GPU time
+const macOut = (gpu: number) => `${MAC_OUT}@@
+  101  64.0  2097152 /Applications/Claude.app/Contents/MacOS/Claude
+  102  32.0  1048576 /Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)
+  103  16.0   524288 /Users/someone/Library/Application Support/Claude/claude-code/2.1.316/claude.app/Contents/MacOS/claude
+  201  48.0  3145728 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+  301   8.0  1048576 /System/Library/CoreServices/WindowServer
+  302   1.6   262144 /usr/libexec/logd
+@@
++-o AGXDeviceUserClient
+"accumulatedGPUTime"=${gpu}
+"IOUserClientCreator" = "pid 101
++-o AGXDeviceUserClient
+"accumulatedGPUTime"=1000
+"IOUserClientCreator" = "pid 301
+`
+
 test('macOS: CPU, GPU and memory as Activity Monitor counts it', () => {
-  const s = parseMac(MAC_OUT)
+  const { stats: s, procs, gpuTimes } = parseMac(macOut(5000))
   expect(s.cpu).toBe(25)
   expect(s.gpu).toBe(26)
   expect(s.gpuName).toBe('M4 Max')
   expect(Math.round(s.ramUsed! * 10) / 10).toBe(50.8)
   expect(s.ramTotal).toBe(64)
   expect(s.cores).toBe(16)
+  expect(procs.map(p => p.app)).toEqual(['Claude', 'Claude', 'claude', 'Google Chrome', 'macOS', 'macOS'])
+  expect(procs[0]!.ram).toBe(2)
+  expect(gpuTimes?.get('101')).toBe(5000)
+})
+
+test('a process belongs to its outermost app, the system\'s own to macOS', () => {
+  expect(appOf('/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/Contents/MacOS/Code Helper')).toBe('Visual Studio Code')
+  expect(appOf('/usr/sbin/cfprefsd')).toBe('macOS')
+  expect(appOf('/opt/homebrew/bin/node')).toBe('node')
+  expect(appOf('kernel_task')).toBe('kernel_task')
+})
+
+test('the GPU\'s clients add up per process', () => {
+  const times = parseGpuClients('+-o AGXDeviceUserClient\n"accumulatedGPUTime"=10\n"IOUserClientCreator" = "pid 7\n+-o AGXDeviceUserClient\n"accumulatedGPUTime"=5\n"IOUserClientCreator" = "pid 7\n+-o AGXDeviceUserClient\n"accumulatedGPUTime"=3\n')
+  expect(times.get('7')).toBe(15)
+  expect(times.size).toBe(1)
+})
+
+test('the top apps: one per app, in percent of the machine, never above its total', () => {
+  const { stats, procs } = parseMac(macOut(0))
+  const apps = topApps(procs, stats, new Map([['101', 20]]), 3)
+  // Claude, its helpers and the claude CLI count as one app; 112% of one core out of 16
+  expect(apps[0]).toEqual({ name: 'Claude', cpu: 7, gpu: 20, ram: 3.5 })
+  expect(apps.map(a => a.name)).toEqual(['Claude', 'Google Chrome', 'macOS'])
+  // 8 GB of processes at most fit in 6 GB in use: each app is scaled down
+  const tight = topApps(procs, { ...stats, ramUsed: 6 })
+  expect(Math.round(tight.reduce((s, a) => s + (a.ram ?? 0), 0) * 10) / 10).toBe(6)
+  // No GPU figures per app: none shown
+  expect(topApps(procs, stats)[0]!.gpu).toBe(undefined)
+})
+
+test('an app keeps its place, and its color, while it stays at the top', () => {
+  const shown = [{ name: 'Claude' }, { name: 'Chrome' }, { name: 'Xcode' }]
+  expect(keepPlaces(shown, [{ name: 'Xcode' }, { name: 'Safari' }, { name: 'Claude' }]).map(a => a.name)).toEqual(['Claude', 'Safari', 'Xcode'])
+  expect(keepPlaces(undefined, [{ name: 'A' }, { name: 'B' }]).map(a => a.name)).toEqual(['A', 'B'])
+  expect(keepPlaces(shown, [{ name: 'Xcode' }]).map(a => a.name)).toEqual(['Xcode'])
 })
 
 test('Linux: CPU from two samples, memory from MemAvailable, an NVIDIA GPU', () => {
-  const s = parseLinux(`cpu  100 0 100 800 0 0 0 0 0 0
+  const { stats: s, procs } = parseLinux(`cpu  100 0 100 800 0 0 0 0 0 0
 cpu  160 0 140 900 0 0 0 0 0 0
 @@
 MemTotal:       16384000 kB
@@ -475,6 +528,8 @@ MemAvailable:    4096000 kB
 8
 @@
 37, NVIDIA GeForce RTX 4070
+@@
+  4242  12.5  1048576 firefox
 `)
   // 100 busy ticks out of 200
   expect(s.cpu).toBe(50)
@@ -482,41 +537,59 @@ MemAvailable:    4096000 kB
   expect(s.gpuName).toBe('GeForce RTX 4070')
   expect(Math.round(s.ramUsed! * 10) / 10).toBe(11.7)
   expect(s.cores).toBe(8)
+  // ps's %cpu on Linux is an average since start: memory only
+  expect(procs).toEqual([{ pid: '4242', cpu: undefined, ram: 1, app: 'firefox' }])
 })
 
 test('Linux without a GPU tool: no GPU figure', () => {
-  const s = parseLinux('cpu 1 0 1 8 0 0 0 0\ncpu 2 0 2 9 0 0 0 0\n@@\nMemTotal: 1000 kB\nMemAvailable: 500 kB\n@@\n4\n@@\n')
+  const { stats: s } = parseLinux('cpu 1 0 1 8 0 0 0 0\ncpu 2 0 2 9 0 0 0 0\n@@\nMemTotal: 1000 kB\nMemAvailable: 500 kB\n@@\n4\n@@\n')
   expect(s.gpu).toBe(undefined)
 })
 
-test('Windows: load, memory and the 3D engines', () => {
-  const s = parseWindows('12|16777216|8388608|12|33.5\r\n')
+test('Windows: load, memory, the 3D engines and each app\'s memory', () => {
+  const { stats: s, procs } = parseWindows('12|16777216|8388608|12|33.5|chrome=2147483648;Code=1073741824\r\n')
   expect(s.cpu).toBe(12)
   expect(s.gpu).toBe(33.5)
   expect(s.ramUsed).toBe(8)
   expect(s.ramTotal).toBe(16)
+  expect(procs.map(p => [p.app, p.ram])).toEqual([['chrome', 2], ['Code', 1]])
 })
 
-test('the System card shows CPU, GPU and memory', async ($, on) => {
+const mockMac = (on: any, gpu: () => number) => {
   on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'HOME' ? '/Users/someone' : undefined }))
   on('fs.exists', () => ({ value: false }))
   on('process.run', (_: unknown, e: { argv: string[] }) =>
-    ({ value: e.argv[0] === 'sh' ? { exitCode: 0, stdout: MAC_OUT, stderr: '' } : { exitCode: 1, stdout: '', stderr: '' } }),
+    ({ value: e.argv[0] === 'sh' ? { exitCode: 0, stdout: macOut(gpu()), stderr: '' } : { exitCode: 1, stdout: '', stderr: '' } }),
   )
+}
+
+test('the System card comes first, with each app\'s share of the machine', async ($, on) => {
+  let gpu = 1e9
+  mockMac(on, () => gpu)
   await setup($, on)
   await clock.advance(500)
-  const ui = await $.ui.mount(PANE)
-  const alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
-  expect(alts).toContain('System: CPU 25%, GPU 26%, RAM 50.8 / 64 GB')
-  // Right after Context, by default
-  const order = alts.map(a => a.split(':')[0])
-  expect(order.indexOf('System')).toBe(order.lastIndexOf('Context') + 1)
+  let ui = await $.ui.mount(PANE)
+  let alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  const card = () => String(alts.find(a => a.startsWith('System')))
+  expect(card()).toBe(
+    'System: CPU 25%, GPU 26%, RAM 50.8 / 64 GB. Claude: CPU 7%, RAM 3.5 GB; Google Chrome: CPU 3%, RAM 3 GB; macOS: CPU 1%, RAM 1.3 GB',
+  )
+  // First, by default
+  expect(alts.findIndex(a => a.startsWith('System'))).toBeLessThan(alts.findIndex(a => a.startsWith('5-hour')))
+  await ui.unmount()
+  // 0.9 s of GPU time in the 4.5 s since: Claude used 20% of the GPU
+  gpu += 0.9e9
+  await clock.advance(4500)
+  ui = await $.ui.mount(PANE)
+  alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  expect(card()).toContain('Claude: CPU 7%, GPU 20%, RAM 3.5 GB')
+  expect(card()).toContain('macOS: CPU 1%, GPU 0%')
   await ui.unmount()
 })
 
-test('an order saved before the System card gets it right after Context', async ($, on) => {
+const pastOrder = async ($: any, on: any, cardOrder: string[]) => {
   mock.clock(on, { now: Date.parse('2026-11-01T00:00:00Z') })
-  mock.store(on, { cardOrder: ['agents', 'context', 'limits', 'history'] })
+  mock.store(on, { cardOrder })
   on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
   on('session.usage', () => ({ value: USAGE }))
   on('session.id', () => ({ value: 'session-test' }))
@@ -528,6 +601,18 @@ test('an order saved before the System card gets it right after Context', async 
   await ui.unmount()
   const ui2 = await $.ui.mount(PANE)
   const labels = (await ui2.findAll({ type: 'Text' })).map(x => x.text).filter(x => ['Limits', 'Context', 'System', 'History', 'Agents'].includes(x))
-  expect(labels).toEqual(['Agents', 'Context', 'System', 'Limits', 'History'])
   await ui2.unmount()
+  return labels
+}
+
+test('an order saved before the System card gets it at the top', async ($, on) => {
+  expect(await pastOrder($, on, ['agents', 'context', 'limits', 'history'])).toEqual(['System', 'Agents', 'Context', 'Limits', 'History'])
+})
+
+test('the former default order moves System to the top; a chosen one stays', async ($, on) => {
+  expect(await pastOrder($, on, ['limits', 'context', 'system', 'history', 'agents'])).toEqual(['System', 'Limits', 'Context', 'History', 'Agents'])
+})
+
+test('an order the person chose keeps System where they put it', async ($, on) => {
+  expect(await pastOrder($, on, ['context', 'limits', 'system', 'history', 'agents'])).toEqual(['Context', 'Limits', 'System', 'History', 'Agents'])
 })

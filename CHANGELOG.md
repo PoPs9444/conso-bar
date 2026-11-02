@@ -2,6 +2,15 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.24.0] - 2026-11-02
+
+### Added
+- **Your machine, app by app.** Each System ring is cut into colored quarters for the four apps using the most, with the rest in gray, and a table under the rings gives each app's share of the CPU, the GPU and the memory. An app's helper processes count as the app, and each app keeps its color while it stays at the top. On macOS every column is filled; on Linux and Windows, apps are ranked by memory.
+
+### Changed
+- **System comes first.** The card opens the panel; an order you chose yourself stays as it is.
+- **A smaller Context card.** The percentage and the tokens share one line above a thinner bar.
+
 ## [0.23.0] - 2026-11-02
 
 ### Added
