@@ -202,6 +202,45 @@ test('a button keeps its number from one drawing to the next, and Clear clears',
   await ui.unmount()
 })
 
+test('an agent\'s details wait for the 5-second beat; Stop shows at once; its time counts on by itself', async ($, on) => {
+  let runs: unknown = [
+    { id: 'r', isLinked: true, usd: 0, description: 'Long', type: 'Explore', model: 'claude-opus-5-5', status: 'running', startedAt: Date.parse('2026-11-01T00:00:00Z') - 42_000, steps: 1, outputTokens: 10 },
+  ]
+  let version = 1
+  on('state.get', (_: unknown, e: { key: string }, next: (e: unknown) => unknown) =>
+    e.key === 'agentRuns' ? { value: { value: runs, version } } : next(e),
+  )
+  on('state.set', (_: unknown, e: { key: string; value: unknown }, next: (e: unknown) => unknown) => {
+    if (e.key !== 'agentRuns') return next(e)
+    runs = e.value
+    version += 1
+    return { value: { isSet: true, version } }
+  })
+  on('tool.call', () => ({ result: {} }))
+  await setup($, on)
+  const svgs = async () => {
+    const ui = await $.ui.mount(PANE)
+    const all = (await ui.findAll({ type: 'Svg' })).map(x => ({ alt: String(x.props.alt), source: String(x.props.source) }))
+    await ui.unmount()
+    return all
+  }
+  const activity = async () => (await svgs()).find(x => x.alt.includes('step'))?.alt
+  await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'r' } as never)
+  expect(await activity()).toContain('Bash')
+  // A new tool alone does not draw the panel again until the next beat
+  await $.tool.call({ tool: 'Read', file_path: '/x', agentId: 'r' } as never)
+  expect(await activity()).toContain('Bash')
+  await clock.advance(5000)
+  expect(await activity()).toContain('Read')
+  // The time is drawn with all its digits, the one of the moment animated
+  const top = (await svgs()).find(x => x.source.includes('<animate attributeName="display"'))
+  expect(top).toBeDefined()
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'stop-r' })
+  await ui.unmount()
+  expect((await svgs()).some(x => x.source.includes('Stopping'))).toBe(true)
+})
+
 test('a new session shows the last limits reading', async ($, on) => {
   const now = Date.parse('2026-11-01T00:00:00Z')
   mock.clock(on, { now })
@@ -369,16 +408,20 @@ test('Update installs in the background and posts nothing in the conversation', 
     return { text: '' }
   })
   on('ui.toast', () => ({ value: {} }))
+  on('env.get', () => ({ value: undefined }))
+  on('fs.exists', () => ({ value: false }))
   await setup($, on)
   await clock.advance(3000)
   const ui = await $.ui.mount(PANE)
   await ui.press({ key: 'update' })
   await clock.advance(0)
   await ui.unmount()
-  expect(ran).toEqual([
-    ['claude', 'plugin', 'marketplace', 'update', 'conso-bar'],
-    ['claude', 'plugin', 'update', 'conso-bar@conso-bar'],
-  ])
+  // One script that finds Claude Code's command line, then its two commands
+  const updates = ran.filter(a => a.join(' ').includes('plugin update'))
+  expect(updates).toHaveLength(1)
+  expect(updates[0]!.slice(0, 2)).toEqual(['sh', '-c'])
+  expect(updates[0]![2]).toContain('"$c" plugin marketplace update conso-bar && "$c" plugin update conso-bar@conso-bar')
+  expect(updates[0]![2]).toContain('claude-code/"*/*/claude.app/Contents/MacOS/claude')
   // No /reload-plugins: the new version waits for the next conversation
   expect(commands).toEqual([])
   const ui2 = await $.ui.mount(PANE)
@@ -816,4 +859,76 @@ test('the former default order moves System to the top; a chosen one stays', asy
 
 test('an order the person chose keeps System where they put it', async ($, on) => {
   expect(await pastOrder($, on, ['context', 'limits', 'system', 'history', 'agents'])).toEqual(['Context', 'Limits', 'System', 'History', 'Agents'])
+})
+
+const mockWindows = (on: any, update?: { exitCode: number; stderr: string }) => {
+  const ran: string[][] = []
+  const out =
+    '20|16777216|8388608|8|30|1|11,chrome,0.05,4294967296;12,Code,0.1,2147483648;13,svchost,0.02,1610612736;' +
+    '14,game,0.4,1073741824;15,Discord,0,536870912|14=25;15=3;11=2\r\n'
+  on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'APPDATA' ? 'C:\\Users\\x\\AppData\\Roaming' : undefined }))
+  on('fs.exists', () => ({ value: false }))
+  on('process.run', (_: unknown, e: { argv: string[] }) => {
+    ran.push(e.argv)
+    const script = e.argv.join(' ')
+    if (script.includes('Get-Process')) return { value: { exitCode: 0, stdout: out, stderr: '' } }
+    if (script.includes('plugin update')) return { value: { stdout: '', ...(update ?? { exitCode: 0, stderr: '' }) } }
+    return { value: { exitCode: 1, stdout: '', stderr: '' } }
+  })
+  return ran
+}
+
+test('on Windows, a column picked ranks the apps at once, from the last reading', async ($, on) => {
+  const ran = mockWindows(on)
+  await setup($, on)
+  await clock.advance(500)
+  let ui = await $.ui.mount(PANE)
+  const order = async () =>
+    String((await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('System:'))?.props.alt)
+      .split('. ')[1]!
+      .split('; ')
+      .map(x => x.split(':')[0])
+  // By all three: Discord, light on everything, is not among the top four
+  expect(await order()).toEqual(['game', 'chrome', 'Code', 'svchost'])
+  const readings = ran.length
+  await ui.press({ key: 'sort-gpu' })
+  await ui.unmount()
+  ui = await $.ui.mount(PANE)
+  // Its GPU share brings it in, with no new reading
+  expect(await order()).toEqual(['game', 'Discord', 'chrome', 'Code'])
+  expect(ran.length).toBe(readings)
+  await ui.unmount()
+})
+
+test('on Windows, Update finds Claude Code through PowerShell', async ($, on) => {
+  on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
+  on('ui.toast', () => ({ value: {} }))
+  const ran = mockWindows(on)
+  await setup($, on)
+  await clock.advance(3000)
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'update' })
+  await clock.advance(0)
+  await ui.unmount()
+  const update = ran.find(a => a.join(' ').includes('plugin update'))!
+  expect(update.slice(0, 3)).toEqual(['powershell', '-NoProfile', '-Command'])
+  expect(update[3]).toContain('claude-code')
+  expect(update[3]).toContain('& $c plugin update conso-bar@conso-bar')
+})
+
+test('Update says so when Claude Code\'s command line is nowhere', async ($, on) => {
+  const toasts: string[] = []
+  on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
+  on('ui.toast', (_: unknown, e: { text: string }) => {
+    toasts.push(e.text)
+    return { value: {} }
+  })
+  mockWindows(on, { exitCode: 127, stderr: '' })
+  await setup($, on)
+  await clock.advance(3000)
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'update' })
+  await clock.advance(0)
+  await ui.unmount()
+  expect(toasts).toEqual(["Update failed: Claude Code's command line was not found"])
 })

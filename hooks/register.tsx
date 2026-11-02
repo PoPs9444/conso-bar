@@ -3,19 +3,19 @@ import type { ButtonProps, EngineInterface, Register, RenderChildren, RenderElem
 
 import type { AgentRun, AppSort, CardKey, Day, Lang, Limit, Snapshot, SystemStats, UpdateState } from '../types'
 
-import { agentsCard } from './agents'
+import { agentsCard, nextLayout } from './agents'
 
 import { HEX, contextCard, footerLine, heat, historyCard, left, limitCards, systemCard, updateCard } from './dashboard'
 import { STRINGS, toLang } from './i18n'
 import type { Strings } from './i18n'
 import { costOf } from './pricing'
 import { LINUX, MAC, WINDOWS, keepColors, parseLinux, parseMac, parseWindows, topApps } from './system'
-import type { GpuClient, Platform, Reading } from './system'
+import type { GpuClient, Platform, Proc, Reading } from './system'
 
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.27.0'
+export const VERSION = '0.28.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
@@ -25,6 +25,9 @@ const MIN_CHECK_MS = 1200
 const snapshot = atom({ plugin: 'conso-bar', key: 'snapshot' } as const, null)
 const isCompacting = atom({ plugin: 'conso-bar', key: 'isCompacting' } as const, false)
 const agents = atom({ plugin: 'conso-bar', key: 'agentRuns' } as const, [])
+// The agents as the card last drew them; null until the first change, the
+// card then draws the agents themselves
+const agentView = atom({ plugin: 'conso-bar', key: 'agentView' } as const, null as AgentRun[] | null)
 const tick = atom({ plugin: 'conso-bar', key: 'tick' } as const, 0)
 const history = atom({ plugin: 'conso-bar', key: 'history' } as const, [])
 const DEFAULT_ORDER: CardKey[] = ['system', 'limits', 'context', 'history', 'agents']
@@ -155,7 +158,7 @@ const remember = async ($: EngineInterface, s: Snapshot) => {
   await setHistory($, lastWeek(days, now))
 }
 
-let ticker: { cancel: () => void } | undefined
+let ticker: { at: number; cancel: () => void } | undefined
 
 // The panel's buttons as last drawn, by surface and key. The engine numbers
 // each Button it is handed and the app knows a button by that number, so a
@@ -165,19 +168,59 @@ let ticker: { cancel: () => void } | undefined
 // back as it was, and its press runs the latest drawing's handler
 const kept = new Map<string, { look: string; button: RenderElement; press: () => unknown }>()
 
-const patch = async ($: EngineInterface, id: string, fn: (a: AgentRun) => AgentRun) => {
-  await update($, agents, list => list.map(a => (a.id === id ? fn(a) : a)))
+// A running agent's time counts on inside its drawing: the panel is drawn
+// again only when that time changes layout (at one minute, then each hour)
+const syncTicker = async ($: EngineInterface, list: readonly AgentRun[]) => {
+  const now = await $.clock.now()
+  const waits = list.filter(a => a.status === 'running').map(a => nextLayout(now - a.startedAt))
+  const at = waits.length ? now + Math.min(...waits) + 50 : undefined
+  if (ticker && ticker.at === at) return
+  ticker?.cancel()
+  ticker = undefined
+  if (at === undefined) return
+  const timer = $.clock.after(at - now, () => {
+    ticker = undefined
+    void update($, tick, n => n + 1)
+      .then(() => read($, agents))
+      .then(l => syncTicker($, l))
+      .catch(() => undefined)
+  })
+  ticker = { at, cancel: () => timer.cancel() }
 }
 
-// A one-second clock while an agent runs, for the displayed duration
-const syncTicker = async ($: EngineInterface, list?: readonly AgentRun[]) => {
-  const live = (list ?? (await read($, agents))).some(a => a.status === 'running')
-  if (live && !ticker) {
-    ticker = $.clock.every(1000, () => void update($, tick, n => n + 1))
-  } else if (!live && ticker) {
-    ticker.cancel()
-    ticker = undefined
+// What the Agents card shows. Each step, tool and token of an agent would draw
+// the panel again, and the app draws a button under the pointer without its
+// highlight for an instant at each drawing: those details show every 5
+// seconds, with the System card's reading. An agent that starts, ends or
+// stops shows at once
+let isViewBehind = false
+const outline = (list: readonly AgentRun[]) => list.map(a => `${a.id} ${a.status} ${a.isStopping ? 1 : 0} ${a.description}`).join('\n')
+const showAgents = async ($: EngineInterface, list: readonly AgentRun[]) => {
+  const shown = await read($, agentView)
+  if (shown !== null && outline(shown) === outline(list)) {
+    isViewBehind = true
+    return
   }
+  isViewBehind = false
+  await update($, agentView, () => [...list])
+  await syncTicker($, list)
+}
+const catchUpAgents = async ($: EngineInterface) => {
+  if (!isViewBehind) return
+  isViewBehind = false
+  const list = await read($, agents)
+  await update($, agentView, () => [...list])
+}
+
+// Every write of the agents goes through here, then to the card
+const setAgents = async ($: EngineInterface, fn: (list: AgentRun[]) => AgentRun[]) => {
+  const list = await update($, agents, fn)
+  await showAgents($, list)
+  return list
+}
+
+const patch = async ($: EngineInterface, id: string, fn: (a: AgentRun) => AgentRun) => {
+  await setAgents($, list => list.map(a => (a.id === id ? fn(a) : a)))
 }
 
 // A window past its reset goes back to 0%, even without a new reading
@@ -213,9 +256,12 @@ let lastGpu: { at: number; clients: Map<string, GpuClient> } | undefined
 // reads again at once) keep the last figures
 const MIN_GPU_SPAN_MS = 2000
 
+const platformOf = async ($: EngineInterface): Promise<Platform> =>
+  (platform ??= (await $.env.get('APPDATA')) ? 'windows' : (await $.fs.exists('/proc/stat')) ? 'linux' : 'mac')
+
 // One reading of the machine's load; undefined when the machine would not say
 const readSystem = async ($: EngineInterface): Promise<Reading | undefined> => {
-  platform ??= (await $.env.get('APPDATA')) ? 'windows' : (await $.fs.exists('/proc/stat')) ? 'linux' : 'mac'
+  await platformOf($)
   const r =
     platform === 'windows'
       ? await $.process.run(['powershell', '-NoProfile', '-Command', WINDOWS], { timeoutMs: 8000 })
@@ -250,8 +296,43 @@ const gpuShares = (clients: Map<string, GpuClient> | undefined, at: number) => {
   return { byPid, total: Math.min(100, total) }
 }
 
-// One reading of the machine's load, kept as drawn (whole percents, tenths of
-// a GB): a reading that changes nothing on screen writes nothing
+// The last reading, ready to be ranked again: a new sort shows the apps that
+// use the most of that column at once, without waiting for a new reading
+// (seconds on Windows)
+let lastReading: { procs: Proc[]; stats: SystemStats; gpuByPid?: Map<string, number>; isGpuKept: boolean } | undefined
+
+// The machine's load as drawn (whole percents, tenths of a GB), its top apps
+// ranked by the column picked: what changes nothing on screen writes nothing
+const showSystem = async ($: EngineInterface) => {
+  const r = lastReading
+  if (!r) return
+  const before = await read($, system)
+  const whole = (n: number | undefined) => (n === undefined ? undefined : Math.round(n))
+  const tenth = (n: number | undefined) => (n === undefined ? undefined : Math.round(n * 10) / 10)
+  const lastShare = new Map((before?.apps ?? []).map(a => [a.name, a.gpu]))
+  const hadShares = before?.apps?.some(a => a.gpu !== undefined) ?? false
+  const apps = keepColors(
+    before?.apps,
+    topApps(r.procs, r.stats, r.gpuByPid, 4, await read($, appSort)).map(a => ({
+      name: a.name,
+      cpu: whole(a.cpu),
+      gpu: r.isGpuKept ? (hadShares ? (lastShare.get(a.name) ?? 0) : undefined) : whole(a.gpu),
+      ram: tenth(a.ram),
+    })),
+  )
+  const s = r.stats
+  const shown: SystemStats = {
+    ...s,
+    cpu: whole(s.cpu),
+    gpu: whole(s.gpu),
+    ramUsed: tenth(s.ramUsed),
+    ramTotal: tenth(s.ramTotal),
+    apps: apps.length ? apps : undefined,
+  }
+  if (!same(before, shown)) await update($, system, () => shown)
+}
+
+// One reading of the machine's load
 const pollSystem = async ($: EngineInterface) => {
   // A hidden System card costs nothing: no reading until it comes back
   if (isReading || (await read($, hidden)).includes('system')) return
@@ -265,31 +346,11 @@ const pollSystem = async ($: EngineInterface) => {
     // another): the GPU and each app's share stay as last shown, so the figure
     // never drops to 0% and its column never leaves
     const isGpuKept = !gpu && reading.gpuTimes !== undefined && before?.gpu !== undefined
-    const s = gpu ? { ...reading.stats, gpu: gpu.total } : isGpuKept ? { ...reading.stats, gpu: before.gpu } : reading.stats
-    const whole = (n: number | undefined) => (n === undefined ? undefined : Math.round(n))
-    const tenth = (n: number | undefined) => (n === undefined ? undefined : Math.round(n * 10) / 10)
-    const lastShare = new Map((before?.apps ?? []).map(a => [a.name, a.gpu]))
-    const hadShares = before?.apps?.some(a => a.gpu !== undefined) ?? false
-    const apps = keepColors(
-      before?.apps,
-      // macOS: each app's GPU time over the interval; Windows: the system's own
-      // share by process
-      topApps(reading.procs, s, gpu?.byPid ?? reading.gpuByPid, 4, await read($, appSort)).map(a => ({
-        name: a.name,
-        cpu: whole(a.cpu),
-        gpu: isGpuKept ? (hadShares ? (lastShare.get(a.name) ?? 0) : undefined) : whole(a.gpu),
-        ram: tenth(a.ram),
-      })),
-    )
-    const shown: SystemStats = {
-      ...s,
-      cpu: whole(s.cpu),
-      gpu: whole(s.gpu),
-      ramUsed: tenth(s.ramUsed),
-      ramTotal: tenth(s.ramTotal),
-      apps: apps.length ? apps : undefined,
-    }
-    if (!same(before, shown)) await update($, system, () => shown)
+    const stats = gpu ? { ...reading.stats, gpu: gpu.total } : isGpuKept ? { ...reading.stats, gpu: before.gpu } : reading.stats
+    // macOS: each app's GPU time over the interval; Windows: the system's own
+    // share by process
+    lastReading = { procs: reading.procs, stats, gpuByPid: gpu?.byPid ?? reading.gpuByPid, isGpuKept }
+    await showSystem($)
   } finally {
     isReading = false
   }
@@ -335,22 +396,40 @@ const checkUpdate = async ($: EngineInterface, isManual = false) => {
   else await update($, updateState, result)
 }
 
-// Claude Code's two official commands, in the background: refresh the
-// marketplace, then the plugin. Nothing reloads under the conversation and
-// nothing is posted in it: the new version takes effect in the next one
+// Claude Code's own command line updates: the copy this engine runs from when
+// it says so, the desktop app's own copy (the newest), then the one on the
+// PATH. Someone with only the desktop app has no claude command, and the
+// one on the PATH may be old: the first one found is used, whatever version
+// of Conso is installed. Exit 127: none found
+const STEPS = `plugin marketplace update ${MARKETPLACE} && "$c" plugin update conso-bar@${MARKETPLACE}`
+const UPDATE_SH =
+  'for c in "$CLAUDE_CODE_EXECPATH" ' +
+  '"$(ls -td "$HOME/Library/Application Support/Claude/claude-code/"*/*/claude.app/Contents/MacOS/claude 2>/dev/null | head -1)" ' +
+  '"$(command -v claude)" "$HOME/.local/bin/claude"; do ' +
+  `if [ -n "$c" ] && [ -x "$c" ]; then "$c" ${STEPS}; exit $?; fi; done; exit 127`
+const UPDATE_PS =
+  '$c = @($env:CLAUDE_CODE_EXECPATH) + ' +
+  "@(Get-ChildItem \"$env:APPDATA\\Claude\\claude-code\" -Recurse -Filter claude.exe -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | ForEach-Object { $_.FullName }) + " +
+  '@(Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | ForEach-Object { $_.Source }) + ' +
+  "@(\"$env:USERPROFILE\\.local\\bin\\claude.exe\") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1; " +
+  'if (-not $c) { exit 127 }; ' +
+  `& $c plugin marketplace update ${MARKETPLACE}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; ` +
+  `& $c plugin update conso-bar@${MARKETPLACE}; exit $LASTEXITCODE`
+
+// In the background: refresh the marketplace, then the plugin. Nothing
+// reloads under the conversation and nothing is posted in it: the new version
+// takes effect in the next one
 const runUpdate = async ($: EngineInterface) => {
   const t = await words($)
   const cur = await read($, updateState)
   if (cur.status === 'running') return
   await update($, updateState, (u): UpdateState => ({ ...u, status: 'running' }))
   try {
-    for (const argv of [
-      ['claude', 'plugin', 'marketplace', 'update', MARKETPLACE],
-      ['claude', 'plugin', 'update', `conso-bar@${MARKETPLACE}`],
-    ]) {
-      const r = await $.process.run(argv, { timeoutMs: 180_000 })
-      if (r.exitCode !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').pop() || `code ${r.exitCode}`)
-    }
+    const argv =
+      (await platformOf($)) === 'windows' ? ['powershell', '-NoProfile', '-Command', UPDATE_PS] : ['sh', '-c', UPDATE_SH]
+    const r = await $.process.run(argv, { timeoutMs: 300_000 })
+    if (r.exitCode === 127) throw new Error(t.noClaude)
+    if (r.exitCode !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').pop() || `code ${r.exitCode}`)
     await update($, updateState, (u): UpdateState => ({ ...u, status: 'done', message: undefined }))
     if (cur.latest) await $.store.set('installedVersion', cur.latest)
   } catch (err) {
@@ -389,12 +468,13 @@ const moveCard = async ($: EngineInterface, key: CardKey, by: -1 | 1) => {
 }
 
 // Rank the System card's apps by one column; the column picked again goes back
-// to all three. The rows reorder at once, then a reading picks the top apps
-// for that column
+// to all three. The last reading is ranked again at once: the apps that use
+// the most of that column come first, the next reading keeps them so
 const sortApps = async ($: EngineInterface, key: AppSort) => {
   const next = await update($, appSort, cur => (cur === key ? null : key))
   await $.store.set('appSort', next)
-  $.clock.after(0, () => void pollSystem($).catch(() => undefined))
+  if (lastReading) await showSystem($)
+  else $.clock.after(0, () => void pollSystem($).catch(() => undefined))
 }
 
 // Hide a card, or bring it back where it was
@@ -479,6 +559,10 @@ export const register: Register = on => {
     // The language again every 10 minutes, should it change in the meantime
     langPoller?.cancel()
     langPoller = $.clock.every(600_000, () => void syncLang($).catch(() => undefined))
+    // Agents still running (after a reload): their times change layout on time
+    void read($, agents)
+      .then(l => syncTicker($, l))
+      .catch(() => undefined)
     // The machine's load, for the panel only: a first reading right away, then
     // every 5 seconds (10 on Windows, where PowerShell starts slower)
     systemPoller?.cancel()
@@ -487,10 +571,15 @@ export const register: Register = on => {
       $.clock.after(500, () => void pollSystem($).catch(() => undefined))
       // A second reading as soon as the GPU can be measured, not 5 seconds later
       $.clock.after(500 + MIN_GPU_SPAN_MS + 600, () => void pollSystem($).catch(() => undefined))
+      // The agents' details catch up on the same beat, after the reading: one
+      // drawing for both
       let beat = 0
       systemPoller = $.clock.every(5000, () => {
-        if (platform === 'windows' && beat++ % 2 === 1) return
-        void pollSystem($).catch(() => undefined)
+        const isSkipped = platform === 'windows' && beat++ % 2 === 1
+        void (isSkipped ? Promise.resolve() : pollSystem($))
+          .catch(() => undefined)
+          .then(() => catchUpAgents($))
+          .catch(() => undefined)
       })
     }
     return r
@@ -535,7 +624,7 @@ export const register: Register = on => {
     const sorting = await read($, appSort)
     const sys = stats ? systemCard(stats, t, sorting) : null
     const busy = await read($, isCompacting)
-    const ag = agentsCard(await read($, agents), now, t)
+    const ag = agentsCard((await read($, agentView)) ?? (await read($, agents)), now, t)
 
     // Every button of the panel: plain, dim at rest unless told otherwise
     const site = `${e.surface}\u0000`
@@ -565,7 +654,7 @@ export const register: Register = on => {
     }
 
     // Clear frees the room taken by finished agents
-    const clearFinished = () => update($, agents, list => list.filter(a => a.status === 'running'))
+    const clearFinished = () => setAgents($, list => list.filter(a => a.status === 'running'))
 
     // Clean stop: no more tools or requests for this agent, it hands back at its
     // next step (a tool already running finishes)
@@ -754,13 +843,12 @@ export const register: Register = on => {
         steps: 0,
         outputTokens: 0,
       }
-      const list = await update($, agents, cur => {
+      await setAgents($, cur => {
         const seen = cur.find(a => a.id === run.id)
         // Already seen through its first step: just give it its name
         if (seen) return cur.map(a => (a === seen ? { ...a, description: run.description, type: run.type, prompt: run.prompt } : a))
         return [...cur, run].slice(-50)
       })
-      await syncTicker($, list)
     }
     return r
   })
@@ -771,7 +859,7 @@ export const register: Register = on => {
     const id = e.agentId
     if (id !== undefined) {
       const head = e.text.slice(0, 200)
-      await update($, agents, list => {
+      await setAgents($, list => {
         if (list.some(a => a.id === id)) return list
         const spawn = list.find(a => !a.isLinked && a.status === 'running' && a.prompt === head)
         return spawn ? list.map(a => (a === spawn ? { ...a, id, isLinked: true } : a)) : list
@@ -796,7 +884,7 @@ export const register: Register = on => {
     // One write per step: linked or added, then counted
     const count = (a: AgentRun): AgentRun =>
       a.isStopping ? a : { ...a, model: e.model, effort: e.effort ?? a.effort, steps: a.steps + 1 }
-    const list = await update($, agents, cur => {
+    const list = await setAgents($, cur => {
       if (cur.some(a => a.id === id)) return cur.map(a => (a.id === id ? count(a) : a))
       // Known to the engine but not linked by its prompt: take a pending launch
       // of the same model
@@ -817,7 +905,6 @@ export const register: Register = on => {
       }
       return [...cur, run].slice(-50)
     })
-    await syncTicker($, list)
     // Stop requested: no new request, the agent hands back cleanly
     if (list.find(a => a.id === id)?.isStopping) {
       return {
@@ -864,7 +951,6 @@ export const register: Register = on => {
         endedAt: now,
         lastTool: undefined,
       }))
-      await syncTicker($)
     }
     return next(e)
   })

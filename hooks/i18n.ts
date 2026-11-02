@@ -64,6 +64,7 @@ export type Strings = {
   noVersion: string
   compactFailed: (m: string) => string
   updateFailed: (m: string) => string
+  noClaude: string
   waiting: string
   nothingYet: string
   cards: Record<CardKey, string>
@@ -125,6 +126,7 @@ const en: Strings = {
   noVersion: 'no version found on GitHub',
   compactFailed: m => `Compact failed: ${m}`,
   updateFailed: m => `Update failed: ${m}`,
+  noClaude: "Claude Code's command line was not found",
   waiting: 'Waiting for the first reply…',
   nothingYet: 'Nothing to show yet',
   cards: { limits: 'Limits', context: 'Context', system: 'System', history: 'History', agents: 'Agents' },
@@ -186,6 +188,7 @@ const fr: Strings = {
   noVersion: 'aucune version trouvée sur GitHub',
   compactFailed: m => `Échec du compactage : ${m}`,
   updateFailed: m => `Échec de la mise à jour : ${m}`,
+  noClaude: 'Ligne de commande de Claude Code introuvable',
   waiting: 'En attente de la première réponse…',
   nothingYet: 'Rien à afficher pour le moment',
   cards: { limits: 'Limites', context: 'Contexte', system: 'Système', history: 'Historique', agents: 'Agents' },
@@ -247,6 +250,7 @@ const es: Strings = {
   noVersion: 'no se encontró ninguna versión en GitHub',
   compactFailed: m => `Error al compactar: ${m}`,
   updateFailed: m => `Error al actualizar: ${m}`,
+  noClaude: 'No se encontró la línea de comandos de Claude Code',
   waiting: 'Esperando la primera respuesta…',
   nothingYet: 'Nada que mostrar todavía',
   cards: { limits: 'Límites', context: 'Contexto', system: 'Sistema', history: 'Historial', agents: 'Agentes' },
@@ -308,6 +312,7 @@ const de: Strings = {
   noVersion: 'keine Version auf GitHub gefunden',
   compactFailed: m => `Komprimieren fehlgeschlagen: ${m}`,
   updateFailed: m => `Aktualisierung fehlgeschlagen: ${m}`,
+  noClaude: 'Kommandozeile von Claude Code nicht gefunden',
   waiting: 'Warte auf die erste Antwort…',
   nothingYet: 'Noch nichts anzuzeigen',
   cards: { limits: 'Limits', context: 'Kontext', system: 'System', history: 'Verlauf', agents: 'Agenten' },
@@ -369,6 +374,7 @@ const it: Strings = {
   noVersion: 'nessuna versione trovata su GitHub',
   compactFailed: m => `Compattazione non riuscita: ${m}`,
   updateFailed: m => `Aggiornamento non riuscito: ${m}`,
+  noClaude: 'Riga di comando di Claude Code non trovata',
   waiting: 'In attesa della prima risposta…',
   nothingYet: 'Ancora niente da mostrare',
   cards: { limits: 'Limiti', context: 'Contesto', system: 'Sistema', history: 'Cronologia', agents: 'Agenti' },
@@ -430,6 +436,7 @@ const pt: Strings = {
   noVersion: 'nenhuma versão encontrada no GitHub',
   compactFailed: m => `Falha ao compactar: ${m}`,
   updateFailed: m => `Falha na atualização: ${m}`,
+  noClaude: 'Linha de comando do Claude Code não encontrada',
   waiting: 'Aguardando a primeira resposta…',
   nothingYet: 'Nada para mostrar ainda',
   cards: { limits: 'Limites', context: 'Contexto', system: 'Sistema', history: 'Histórico', agents: 'Agentes' },

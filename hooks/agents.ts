@@ -38,6 +38,47 @@ export const duration = (ms: number, u: Strings['units']) => {
   return `${Math.floor(s / 3600)}${u.h} ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}${u.m}`
 }
 
+// A running agent's time, counting on by itself. Each digit is drawn with all
+// its values, and an animation shows the one of the moment, started at the
+// time already gone by. So the panel is not drawn again every second (the app
+// draws a button under the pointer without its highlight for an instant at
+// each drawing). The layout changes at one minute and at each hour: the panel
+// is drawn again then
+const fixed = (n: number) => String(Math.round(n * 1e5) / 1e5)
+const digit = (values: readonly string[], step: number, elapsed: number) => {
+  const n = values.length
+  const cycle = n * step
+  const at = fixed(elapsed % cycle)
+  return values
+    .map((v, k) => {
+      const [shown, times] =
+        k === 0 ? ['inline;none', `0;${fixed(1 / n)}`] : k === n - 1 ? ['none;inline', `0;${fixed(k / n)}`] : ['none;inline;none', `0;${fixed(k / n)};${fixed((k + 1) / n)}`]
+      return (
+        `<tspan display="none">${v}<animate attributeName="display" values="${shown}" keyTimes="${times}" calcMode="discrete" ` +
+        `dur="${cycle}s" begin="-${at}s" repeatCount="indefinite"/></tspan>`
+      )
+    })
+    .join('')
+}
+const TENS = ['0', '1', '2', '3', '4', '5']
+const UNITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+// A leading ten that is zero is not written: 7s, 9min 05s
+const LEAD = ['', '1', '2', '3', '4', '5']
+
+export const liveDuration = (ms: number, u: Strings['units']) => {
+  const e = Math.max(0, ms / 1000)
+  if (e < 60) return `${digit(LEAD, 10, e)}${digit(UNITS, 1, e)}${esc(u.s)}`
+  if (e < 3600) return `${digit(LEAD, 600, e)}${digit(UNITS, 60, e)}${esc(u.m)} ${digit(TENS, 10, e)}${digit(UNITS, 1, e)}${esc(u.s)}`
+  return `${Math.floor(e / 3600)}${esc(u.h)} ${digit(TENS, 600, e)}${digit(UNITS, 60, e)}${esc(u.m)}`
+}
+
+// When a running time next changes layout (one minute, each hour), in ms
+export const nextLayout = (ms: number) => {
+  const e = Math.max(0, ms / 1000)
+  const next = e < 60 ? 60 : e < 3600 ? 3600 : (Math.floor(e / 3600) + 1) * 3600
+  return (next - e) * 1000
+}
+
 const compactNum = (n: number) => (n >= 1000 ? `${num(n / 1000, n >= 10_000 ? 0 : 1)}k` : String(n))
 
 // Small amounts: enough decimals to stay readable
@@ -107,9 +148,14 @@ const rowParts = (a: AgentRun, o: number, now: number, t: Strings) => {
   const time = duration((a.endedAt ?? now) - a.startedAt, t.units)
 
   const side = running ? (a.isStopping ? `${t.status.stopping} · ${time}` : time) : `${statusName(a.status, t)} · ${time}`
+  // A running time counts on by itself, drawn with its prefix when stopping
+  const sideSvg = running
+    ? `${a.isStopping ? `${esc(t.status.stopping)} · ` : ''}${liveDuration(now - a.startedAt, t.units)}`
+    : esc(side)
   // The title fades out before the duration, at the drawing's real width
-  // (11.5 px semibold ≈ 7 px per character, rounded up to stay clear)
-  const sideW = Math.ceil(side.length * 7) + 10
+  // (11.5 px semibold ≈ 7 px per character, rounded up to stay clear; a
+  // running time may gain a digit before the next drawing)
+  const sideW = Math.ceil((side.length + (running ? 1 : 0)) * 7) + 10
 
   const top =
     (o > 0 ? `<line class="divider" x1="0" x2="100%" y1="0.5" y2="0.5"/>` : '') +
@@ -119,7 +165,7 @@ const rowParts = (a: AgentRun, o: number, now: number, t: Strings) => {
       sideW,
       `<text class="${running ? 't1' : 't2'}" x="24" y="${o + 13}" font-size="13" font-weight="600">${esc(clip(a.description || a.type, 90))}</text>`,
     ) +
-    `<text x="100%" y="${o + 13}" text-anchor="end" font-size="11.5" font-weight="600" font-variant-numeric="tabular-nums" fill="${running ? HEX.green : a.status === 'done' ? '#6e6e74' : HEX.red}">${esc(side)}</text>`
+    `<text x="100%" y="${o + 13}" text-anchor="end" font-size="11.5" font-weight="600" font-variant-numeric="tabular-nums" fill="${running ? HEX.green : a.status === 'done' ? '#6e6e74' : HEX.red}">${sideSvg}</text>`
 
   const dim = running ? '' : ' fill-opacity=".65"'
   const sep = `<tspan class="t3">  ·  </tspan>`
