@@ -137,13 +137,13 @@ const bar = (y: number, p: number, h = 6) =>
   `<rect class="trackfill" x="0" y="${y}" width="100%" height="${h}" rx="${h / 2}"/>` +
   (p > 0 ? `<rect fill="url(#heatbar)" x="0" y="${y}" width="${Math.max(1.5, Math.min(100, p)).toFixed(1)}%" height="${h}" rx="${h / 2}"/>` : '')
 
-const ring = (cx: number, cy: number, r: number, p: number, color: string) => {
+const ring = (cx: number, cy: number, r: number, p: number, color: string, w = 7) => {
   const c = 2 * Math.PI * r
   const on = (Math.min(100, Math.max(0, p)) / 100) * c
   return (
-    `<circle class="track" cx="${cx}" cy="${cy}" r="${r}" stroke-width="7"/>` +
+    `<circle class="track" cx="${cx}" cy="${cy}" r="${r}" stroke-width="${w}"/>` +
     (on > 0
-      ? `<circle cx="${cx}" cy="${cy}" r="${r}" stroke="${color}" stroke-width="7" fill="none" stroke-linecap="round"
+      ? `<circle cx="${cx}" cy="${cy}" r="${r}" stroke="${color}" stroke-width="${w}" fill="none" stroke-linecap="round"
           stroke-dasharray="${Math.max(0.1, on).toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"/>`
       : '')
   )
@@ -181,104 +181,97 @@ const projection = (l: Limit, now: number, t: Strings) => {
   return { text: t.fullIn(span(eta, t.units)), color: heat(100) }
 }
 
-// A limit: gauge on the left; on the right the title and time to reset, then
-// the session cost (weekly card) and the forecast at the average pace
-const limitCard = (name: string, l: Limit, now: number, t: Strings, usd?: number) => {
-  const p = l.percentUsed
-  const color = heat(p)
-  const reset = left(l.resetsAt, now, t.units)
-  const proj = projection(l, now, t)
-  // One line per figure under the title: never two texts on the same line
-  const lines = (usd !== undefined ? 1 : 0) + (proj ? 1 : 0)
-  const H = lines === 2 ? 72 : 60
-  const cx = 30
-  const cy = H / 2
-  const tx = 72
-  const ty = lines === 0 ? cy + 4 : lines === 1 ? 17 : 14
-  let body = ''
-  if (usd !== undefined) {
-    body += `<text x="${tx}" y="${lines === 2 ? 42 : 47}" font-size="22" font-weight="700" fill="${HEX.gold}">${esc(dollars(usd))}</text>`
-  }
-  if (proj) {
-    body += `<text x="${tx}" y="${lines === 2 ? 63 : 43}" font-size="11.5" font-weight="600" fill="${proj.color}">${esc(proj.text)}</text>`
-  }
-  return {
-    key: l.kind,
-    h: H,
-    alt: `${name}: ${pct(p)}${usd !== undefined ? `, ${t.cost} ${dollars(usd)}` : ''}${proj ? `, ${proj.text}` : ''}`,
-    svg: fluid(
-      H,
-      ring(cx, cy, 26, p, color) +
-        `<text x="${cx}" y="${cy + 5}" text-anchor="middle" font-size="14.5" font-weight="700" fill="${color}">${esc(pct(p))}</text>` +
-        // The title fades out before the reset time; the lines below fade at the edge
-      fadeRight(H, reset ? Math.ceil(reset.length * 7.2) + 10 : 0, title(tx, ty, name.toUpperCase())) +
-        (reset
-          ? `<text class="t2" x="100%" y="${ty}" text-anchor="end" font-size="12" font-weight="600" font-variant-numeric="tabular-nums">${esc(reset)}</text>`
-          : '') +
-        fadeRight(H, 0, body),
-    ),
-  }
-}
-
-// Cost of recent days across all sessions: today in large type, the week as bars.
-// Each day takes its color from what it cost next to the week's biggest day:
-// green for a light day, red for the heaviest
+// Cost of recent days across all sessions, kept small: the title, then today
+// and the week on one line, and the week as small bars on the right. Each bar
+// takes its color from what the day cost next to the week's biggest day
 export const historyCard = (days: readonly Day[], t: Strings) => {
   if (days.length === 0) return null
-  const H = 80
+  const H = 34
   const today = days[days.length - 1]!
   const week = days.reduce((sum, d) => sum + d.usd, 0)
   const max = Math.max(...days.map(d => d.usd), 0.01)
   const color = (usd: number) => heat((usd / max) * 100)
-  const bw = 10
-  const gap = 5
+  const bw = 6
+  const gap = 3
   const x0 = -(days.length * bw + (days.length - 1) * gap)
   let bars = ''
   days.forEach((d, i) => {
-    const h = Math.max(2, (d.usd / max) * 44)
-    const x = x0 + i * (bw + gap)
+    const h = Math.max(2, (d.usd / max) * 28)
     const isToday = i === days.length - 1
-    bars +=
-      `<rect x="${x}" y="${(60 - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3" fill="${color(d.usd)}" fill-opacity="${isToday ? 1 : 0.75}"/>` +
-      `<text class="${isToday ? 't1' : 't3'}" x="${x + bw / 2}" y="76" text-anchor="middle" font-size="9.5" font-weight="600">${esc(t.days[new Date(`${d.date}T12:00:00`).getDay()] ?? '')}</text>`
+    bars += `<rect x="${x0 + i * (bw + gap)}" y="${(32 - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="2" fill="${color(d.usd)}" fill-opacity="${isToday ? 1 : 0.75}"/>`
   })
   const svg = fluid(
     H,
     // The figures fade out before the bars when the panel gets narrow
     fadeRight(
       H,
-      -x0 + 10,
+      -x0 + 12,
       title(0, 11, t.history.toUpperCase()) +
-        `<text class="t3" x="0" y="33" font-size="11">${esc(t.today)}</text>` +
-        `<text x="0" y="57" font-size="21" font-weight="700" fill="${color(today.usd)}">${esc(dollars(today.usd))}</text>` +
-        `<text x="0" y="76" font-size="11"><tspan class="t3">${esc(t.week)}  </tspan><tspan class="t1" font-weight="700">${esc(dollars(week))}</tspan></text>`,
+        `<text x="0" y="30" font-size="12"><tspan class="t3">${esc(t.today)}  </tspan><tspan font-weight="700" fill="${color(today.usd)}">${esc(dollars(today.usd))}</tspan>` +
+        `<tspan class="t3">   ${esc(t.week)}  </tspan><tspan class="t1" font-weight="700">${esc(dollars(week))}</tspan></text>`,
     ) + right(bars),
   )
   return { svg, h: H, alt: `${t.history}: ${t.today} ${dollars(today.usd)}, ${t.week} ${dollars(week)}` }
 }
 
-// The top cards: one per limit (the cost on the weekly card), or the cost alone
-// when there is no limit (no subscription)
+// Both limits in one card: a small ring per limit, its name and the time to
+// reset, then the forecast at the average pace; the session cost on the title
+// line. Without a limit (no subscription), the session cost alone
 export const limitCards = (s: Snapshot, now: number, t: Strings) => {
-  const h5 = s.limits.find(l => l.kind === 'five_hour')
-  const w7 = s.limits.find(l => l.kind === 'seven_day')
-  const cards = [
-    h5 ? limitCard(t.fiveHour, h5, now, t, w7 ? undefined : s.usd) : null,
-    w7 ? limitCard(t.weekly, w7, now, t, s.usd) : null,
-  ].filter(c => c !== null)
-  if (cards.length === 0 && s.usd !== undefined) {
-    cards.push({
-      key: 'session',
-      h: 26,
-      alt: `${t.session}: ${dollars(s.usd)}`,
-      svg: fluid(
-        26,
-        title(0, 18, t.session.toUpperCase()) +
-          `<text x="100%" y="20" text-anchor="end" font-size="19" font-weight="700" fill="${HEX.gold}">${esc(dollars(s.usd))}</text>`,
-      ),
-    })
+  const rows = (['five_hour', 'seven_day'] as const).flatMap(kind => {
+    const l = s.limits.find(x => x.kind === kind)
+    return l ? [{ kind, l }] : []
+  })
+  if (rows.length === 0) {
+    if (s.usd === undefined) return []
+    return [
+      {
+        key: 'session',
+        h: 26,
+        alt: `${t.session}: ${dollars(s.usd)}`,
+        svg: fluid(
+          26,
+          title(0, 18, t.session.toUpperCase()) +
+            `<text x="100%" y="20" text-anchor="end" font-size="19" font-weight="700" fill="${HEX.gold}">${esc(dollars(s.usd))}</text>`,
+        ),
+      },
+    ]
   }
-  return cards
+  const TOP = 24
+  const ROW = 42
+  const GAP = 10
+  const H = TOP + rows.length * ROW + (rows.length - 1) * GAP
+  const cost = s.usd === undefined ? '' : dollars(s.usd)
+  let body =
+    title(0, 11, t.cards.limits.toUpperCase()) +
+    (cost
+      ? `<text x="100%" y="11" text-anchor="end" font-size="11.5"><tspan class="t3">${esc(t.session)}  </tspan><tspan font-weight="700" fill="${HEX.gold}">${esc(cost)}</tspan></text>`
+      : '')
+  const alts: string[] = []
+  rows.forEach(({ kind, l }, i) => {
+    const y = TOP + i * (ROW + GAP)
+    const p = l.percentUsed
+    const color = heat(p)
+    const reset = left(l.resetsAt, now, t.units)
+    const proj = projection(l, now, t)
+    const ny = proj ? y + 17 : y + 26
+    body +=
+      ring(21, y + 21, 18, p, color, 5.5) +
+      `<text x="21" y="${y + 25}" text-anchor="middle" font-size="11" font-weight="700" fill="${color}">${esc(pct(p))}</text>` +
+      // The name fades out before the reset time, the forecast at the edge
+      fadeRight(
+        H,
+        reset ? Math.ceil(reset.length * 7.2) + 10 : 0,
+        `<text class="t1" x="52" y="${ny}" font-size="12.5" font-weight="600">${esc(t.limitNames[kind])}</text>`,
+      ) +
+      (reset
+        ? `<text class="t2" x="100%" y="${ny}" text-anchor="end" font-size="12" font-weight="600" font-variant-numeric="tabular-nums">${esc(reset)}</text>`
+        : '') +
+      (proj ? fadeRight(H, 0, `<text x="52" y="${y + 35}" font-size="11.5" font-weight="600" fill="${proj.color}">${esc(proj.text)}</text>`) : '')
+    alts.push(`${kind === 'five_hour' ? t.fiveHour : t.weekly}: ${pct(p)}${proj ? `, ${proj.text}` : ''}`)
+  })
+  if (cost) alts.push(`${t.session}: ${cost}`)
+  return [{ key: 'limits', h: H, alt: alts.join('. '), svg: fluid(H, body) }]
 }
 
 // One color per app in the System card, in the order they hold, and a quieter
