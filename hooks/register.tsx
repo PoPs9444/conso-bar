@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderChildren } from 'claude-code'
+import type { ButtonProps, EngineInterface, Register, RenderChildren, RenderElement } from 'claude-code'
 
 import type { AgentRun, AppSort, CardKey, Day, Lang, Limit, Snapshot, SystemStats, UpdateState } from '../types'
 
@@ -15,7 +15,7 @@ import type { GpuClient, Platform, Reading } from './system'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.26.3'
+export const VERSION = '0.27.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
@@ -157,6 +157,14 @@ const remember = async ($: EngineInterface, s: Snapshot) => {
 
 let ticker: { cancel: () => void } | undefined
 
+// The panel's buttons as last drawn, by surface and key. The engine numbers
+// each Button it is handed and the app knows a button by that number, so a
+// button made again on every redraw (each second while an agent runs) was a
+// new button each time: its highlight under the pointer blinked, and a click
+// sent under the old number was lost. A button that looks the same is handed
+// back as it was, and its press runs the latest drawing's handler
+const kept = new Map<string, { look: string; button: RenderElement; press: () => unknown }>()
+
 const patch = async ($: EngineInterface, id: string, fn: (a: AgentRun) => AgentRun) => {
   await update($, agents, list => list.map(a => (a.id === id ? fn(a) : a)))
 }
@@ -264,7 +272,9 @@ const pollSystem = async ($: EngineInterface) => {
     const hadShares = before?.apps?.some(a => a.gpu !== undefined) ?? false
     const apps = keepColors(
       before?.apps,
-      topApps(reading.procs, s, gpu?.byPid, 4, await read($, appSort)).map(a => ({
+      // macOS: each app's GPU time over the interval; Windows: the system's own
+      // share by process
+      topApps(reading.procs, s, gpu?.byPid ?? reading.gpuByPid, 4, await read($, appSort)).map(a => ({
         name: a.name,
         cpu: whole(a.cpu),
         gpu: isGpuKept ? (hadShares ? (lastShare.get(a.name) ?? 0) : undefined) : whole(a.gpu),
@@ -527,6 +537,19 @@ export const register: Register = on => {
     const busy = await read($, isCompacting)
     const ag = agentsCard(await read($, agents), now, t)
 
+    // Every button of the panel: plain, dim at rest unless told otherwise
+    const site = `${e.surface}\u0000`
+    const drawn = new Set<string>()
+    const button = (key: string, label: string, press: () => unknown, look: Pick<ButtonProps, 'dimColor' | 'hover'> = { dimColor: true }) => {
+      const id = site + key
+      const sig = JSON.stringify([label, look])
+      const was = kept.get(id)
+      const b = was?.look === sig ? was.button : <els.Button key={key} label={label} plain {...look} onPress={() => kept.get(id)?.press()} />
+      kept.set(id, { look: sig, button: b, press })
+      drawn.add(id)
+      return b
+    }
+
     // Exactly what typing /compact does: it shows in the conversation and runs
     // as soon as Claude is idle. Started on a timer so the press returns at
     // once: a compaction outlasts the time a press may take
@@ -570,7 +593,7 @@ export const register: Register = on => {
         ? frame('ctx', [
             <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
               <els.Svg source={ctx.title} alt={t.context} width={ctx.titleW} height={14} />
-              <els.Button key="compact" label={busy ? t.compacting : t.compact} plain dimColor onPress={compact} />
+              {button('compact', busy ? t.compacting : t.compact, compact)}
             </els.Box>,
             <els.Svg key="body" source={ctx.svg} alt={ctx.alt} height={ctx.h} />,
           ])
@@ -590,13 +613,9 @@ export const register: Register = on => {
                 {sys.table.columns.map(c => (
                   <els.Box key={`col-${c.key}`} flexDirection="column" alignItems="center">
                     {sys.table?.isSortable ? (
-                      <els.Button
-                        key={`sort-${c.key}`}
-                        label={sorting === c.key ? `${c.label} ▾` : c.label}
-                        plain
-                        dimColor={sorting !== c.key}
-                        onPress={() => sortApps($, c.key)}
-                      />
+                      button(`sort-${c.key}`, sorting === c.key ? `${c.label} ▾` : c.label, () => sortApps($, c.key), {
+                        dimColor: sorting !== c.key,
+                      })
                     ) : (
                       <els.Text dimColor>{c.label}</els.Text>
                     )}
@@ -611,7 +630,7 @@ export const register: Register = on => {
       agents: frame('agents', [
         <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
           <els.Svg source={ag.head} alt={t.agents} width={ag.headW} height={14} />
-          {ag.finished > 0 ? <els.Button key="clear" label={t.clear} plain dimColor onPress={clearFinished} /> : null}
+          {ag.finished > 0 ? button('clear', t.clear, clearFinished) : null}
         </els.Box>,
         ag.rows.length === 0 ? <els.Svg key="empty" source={ag.empty} alt={t.noAgents} height={ag.emptyH} /> : null,
         ...ag.rows.map(r => (
@@ -621,7 +640,7 @@ export const register: Register = on => {
               <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
                 <els.Svg source={r.mid.svg} alt={r.mid.alt} height={r.mid.h} />
               </els.Box>
-              {r.canStop ? <els.Button key={`stop-${r.id}`} label={t.stop} plain dimColor onPress={stop(r.id)} /> : null}
+              {r.canStop ? button(`stop-${r.id}`, t.stop, stop(r.id)) : null}
             </els.Box>
             <els.Svg source={r.bottom.svg} alt={r.bottom.alt} height={r.bottom.h} />
           </els.Box>
@@ -643,23 +662,9 @@ export const register: Register = on => {
             <els.Box flexGrow={1}>
               <els.Text dimColor>{isHidden ? `${t.cards[key]} · ${t.hiddenTag}` : t.cards[key]}</els.Text>
             </els.Box>
-            {i > 0 ? (
-              <els.Button key={`up-${key}`} plain dimColor onPress={() => moveCard($, key, -1)}>
-                ↑
-              </els.Button>
-            ) : null}
-            {i < cardOrder.length - 1 ? (
-              <els.Button key={`down-${key}`} plain dimColor onPress={() => moveCard($, key, 1)}>
-                ↓
-              </els.Button>
-            ) : null}
-            <els.Button
-              key={`${isHidden ? 'show' : 'hide'}-${key}`}
-              label={isHidden ? t.show : t.hide}
-              plain
-              dimColor
-              onPress={() => toggleCard($, key)}
-            />
+            {i > 0 ? button(`up-${key}`, '↑', () => moveCard($, key, -1)) : null}
+            {i < cardOrder.length - 1 ? button(`down-${key}`, '↓', () => moveCard($, key, 1)) : null}
+            {button(`${isHidden ? 'show' : 'hide'}-${key}`, isHidden ? t.show : t.hide, () => toggleCard($, key))}
           </els.Box>
           {isHidden ? null : (blocks[key] ?? <els.Text dimColor>{t.nothingYet}</els.Text>)}
         </els.Box>
@@ -668,7 +673,7 @@ export const register: Register = on => {
 
     const toggle = (
       <els.Box key="customize-row" flexDirection="row" justifyContent="flex-end">
-        <els.Button key="customize" label={customizing ? t.done : t.customize} plain dimColor onPress={() => update($, isCustomizing, v => !v)} />
+        {button('customize', customizing ? t.done : t.customize, () => update($, isCustomizing, v => !v))}
       </els.Box>
     )
 
@@ -680,16 +685,8 @@ export const register: Register = on => {
     const footer = (
       <els.Box key="footer" flexDirection="column">
         <els.Box flexDirection="row" flexWrap="wrap" justifyContent="center" columnGap={1}>
-          <els.Button
-            key="check-updates"
-            label={t.checkUpdates}
-            plain
-            dimColor
-            onPress={() => checkUpdate($, true)}
-          />
-          {customizing ? null : (
-            <els.Button key="customize" label={t.customize} plain dimColor onPress={() => update($, isCustomizing, v => !v)} />
-          )}
+          {button('check-updates', t.checkUpdates, () => checkUpdate($, true))}
+          {customizing ? null : button('customize', t.customize, () => update($, isCustomizing, v => !v))}
         </els.Box>
         <els.Svg key="version" source={foot.svg} alt={foot.alt} height={foot.h} />
       </els.Box>
@@ -698,7 +695,7 @@ export const register: Register = on => {
     // Every drawing has a fixed height: the panel redraws on each scroll and
     // every second while an agent runs; without a height a drawing collapses
     // for an instant and throws the scroll back to the top
-    return (
+    const tree = (
       <els.Box flexDirection="column" gap={1}>
         {canUpdate(upd) && upd.latest ? (
           // A new version: one line in a blue-tinted card, the whole sentence the
@@ -716,13 +713,12 @@ export const register: Register = on => {
             backgroundColor="rgba(96,165,250,0.08)"
           >
             <els.Svg source={dot(HEX.blue!)} alt="●" width={8} height={18} />
-            <els.Button
-              key="update"
-              label={`${t.newVersion(upd.latest)} · ${t.update}`}
-              plain
-              hover={{ color: HEX.blue, underline: true }}
-              onPress={() => void $.clock.after(0, () => void runUpdate($).catch(() => undefined))}
-            />
+            {button(
+              'update',
+              `${t.newVersion(upd.latest)} · ${t.update}`,
+              () => void $.clock.after(0, () => void runUpdate($).catch(() => undefined)),
+              { hover: { color: HEX.blue, underline: true } },
+            )}
           </els.Box>
         ) : banner ? (
           frame('update-banner', <els.Svg source={banner.svg} alt={banner.alt} height={banner.h} />)
@@ -733,6 +729,9 @@ export const register: Register = on => {
         {footer}
       </els.Box>
     )
+    // The buttons this drawing no longer has are let go
+    for (const id of kept.keys()) if (id.startsWith(site) && !drawn.has(id)) kept.delete(id)
+    return tree
   })
 
   // Live agents
