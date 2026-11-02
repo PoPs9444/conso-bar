@@ -70,10 +70,9 @@ Restart Claude Code. The **Conso** panel opens on the right at the start of ever
 | Card | What it shows |
 | --- | --- |
 | **System** | Three rings for CPU, GPU and memory in use, each cut into a colored quarter per app, and a table of the four apps using the most with their share of each. |
-| **5-hour limit** | Percentage used on a green-to-red gauge, time until the reset, and a forecast. |
-| **Weekly limit** | The same for the week, plus the cost of the current session. |
+| **Limits** | Your 5-hour and weekly usage in one card: a green-to-red ring for each, the time until it resets, a forecast, and the session cost. |
 | **Context** | Percentage and tokens used out of the window, a green-to-red gradient bar, and the **Compact** button. |
-| **History** | Today's cost and a bar for each of the last 7 days, from green for a light day to red for the heaviest. |
+| **History** | Today's cost, the last 7 days' total, and a small bar per day, from green for a light day to red for the heaviest. |
 | **Agents** | Every agent of the session, live. Running ones first. |
 
 Color is kept for the numbers that matter: percentages turn from green to red as they approach 100%, each model family has its own color (Fable red, Opus violet, Sonnet blue, Haiku teal), and each app in the System card keeps its color while it stays among the top four.
@@ -89,7 +88,7 @@ In the terminal, Conso shows a compact bar above the prompt with the same figure
 
 ### Customize the layout
 
-Click **Customize** at the bottom of the panel: each card shows **↑** and **↓** to move it. Click **Done** at the top when you are finished. Your order is remembered in every conversation.
+Click **Customize** at the bottom of the panel: each card shows **↑** and **↓** to move it, and **Hide** to take it off the panel. A hidden card keeps its place and shows **Show** to bring it back. Click **Done** at the top when you are finished. Your layout is remembered in every conversation.
 
 ## Languages
 
@@ -155,7 +154,7 @@ Limits are only known when the model replies. Without a message, no session rece
 <details>
 <summary><b>Does Conso slow Claude Code down?</b></summary>
 <br>
-No. The conversation's replies never pass through Conso: it only follows agents' steps. It writes only when a figure changes, and when nothing moved it hands the app the very same drawing, so nothing is repainted. The System card's reading is one short command every 5 seconds, a fraction of a percent of one core.
+No. The conversation's replies never pass through Conso: it only follows agents' steps. It writes only when a figure changes, and when nothing moved it hands the app the very same drawing, so nothing is repainted. The System card's reading is one short command every 5 seconds, a fraction of a percent of one core, and none at all if you hide the card.
 </details>
 
 <details>

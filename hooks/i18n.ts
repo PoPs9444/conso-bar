@@ -6,6 +6,8 @@ import type { CardKey, Lang } from '../types'
 export type Strings = {
   fiveHour: string
   weekly: string
+  // each limit's name inside the Limits card
+  limitNames: { five_hour: string; seven_day: string }
   session: string
   forecastIn: (span: string) => string
   atReset: (p: number) => string
@@ -43,6 +45,10 @@ export type Strings = {
   checkUpdates: string
   checking: string
   customize: string
+  hide: string
+  show: string
+  // after a hidden card's name in Customize
+  hiddenTag: string
   done: string
   upToDate: string
   checkingUpdates: string
@@ -69,6 +75,7 @@ export type Strings = {
 const en: Strings = {
   fiveHour: '5-hour limit',
   weekly: 'Weekly limit',
+  limitNames: { five_hour: '5-hour', seven_day: 'Weekly' },
   session: 'Session',
   forecastIn: s => `Forecast in ${s}`,
   atReset: p => `≈ ${p}% at reset`,
@@ -102,6 +109,9 @@ const en: Strings = {
   checkUpdates: 'Check for updates',
   checking: 'Checking…',
   customize: 'Customize',
+  hide: 'Hide',
+  show: 'Show',
+  hiddenTag: 'hidden',
   done: 'Done',
   upToDate: 'Up to date',
   checkingUpdates: 'Checking for updates…',
@@ -128,6 +138,7 @@ const en: Strings = {
 const fr: Strings = {
   fiveHour: 'Limite 5 h',
   weekly: 'Limite hebdo',
+  limitNames: { five_hour: '5 heures', seven_day: 'Hebdo' },
   session: 'Session',
   forecastIn: s => `Prévision dans ${s}`,
   atReset: p => `≈ ${p}% à l'échéance`,
@@ -161,6 +172,9 @@ const fr: Strings = {
   checkUpdates: 'Vérifier les mises à jour',
   checking: 'Vérification…',
   customize: 'Personnaliser',
+  hide: 'Masquer',
+  show: 'Afficher',
+  hiddenTag: 'masquée',
   done: 'Terminé',
   upToDate: 'À jour',
   checkingUpdates: 'Recherche de mises à jour…',
@@ -187,6 +201,7 @@ const fr: Strings = {
 const es: Strings = {
   fiveHour: 'Límite 5 h',
   weekly: 'Límite semanal',
+  limitNames: { five_hour: '5 horas', seven_day: 'Semanal' },
   session: 'Sesión',
   forecastIn: s => `Previsión en ${s}`,
   atReset: p => `≈ ${p}% al reiniciar`,
@@ -220,6 +235,9 @@ const es: Strings = {
   checkUpdates: 'Buscar actualizaciones',
   checking: 'Buscando…',
   customize: 'Personalizar',
+  hide: 'Ocultar',
+  show: 'Mostrar',
+  hiddenTag: 'oculta',
   done: 'Listo',
   upToDate: 'Actualizado',
   checkingUpdates: 'Buscando actualizaciones…',
@@ -246,6 +264,7 @@ const es: Strings = {
 const de: Strings = {
   fiveHour: '5-Std.-Limit',
   weekly: 'Wochenlimit',
+  limitNames: { five_hour: '5 Stunden', seven_day: 'Woche' },
   session: 'Sitzung',
   forecastIn: s => `Prognose in ${s}`,
   atReset: p => `≈ ${p}% beim Reset`,
@@ -279,6 +298,9 @@ const de: Strings = {
   checkUpdates: 'Nach Updates suchen',
   checking: 'Suche…',
   customize: 'Anpassen',
+  hide: 'Ausblenden',
+  show: 'Einblenden',
+  hiddenTag: 'ausgeblendet',
   done: 'Fertig',
   upToDate: 'Aktuell',
   checkingUpdates: 'Suche nach Updates…',
@@ -305,6 +327,7 @@ const de: Strings = {
 const it: Strings = {
   fiveHour: 'Limite 5 ore',
   weekly: 'Limite settimanale',
+  limitNames: { five_hour: '5 ore', seven_day: 'Settimana' },
   session: 'Sessione',
   forecastIn: s => `Previsione tra ${s}`,
   atReset: p => `≈ ${p}% al reset`,
@@ -338,6 +361,9 @@ const it: Strings = {
   checkUpdates: 'Cerca aggiornamenti',
   checking: 'Ricerca…',
   customize: 'Personalizza',
+  hide: 'Nascondi',
+  show: 'Mostra',
+  hiddenTag: 'nascosta',
   done: 'Fine',
   upToDate: 'Aggiornato',
   checkingUpdates: 'Ricerca aggiornamenti…',
@@ -364,6 +390,7 @@ const it: Strings = {
 const pt: Strings = {
   fiveHour: 'Limite 5 h',
   weekly: 'Limite semanal',
+  limitNames: { five_hour: '5 horas', seven_day: 'Semanal' },
   session: 'Sessão',
   forecastIn: s => `Previsão em ${s}`,
   atReset: p => `≈ ${p}% no reinício`,
@@ -397,6 +424,9 @@ const pt: Strings = {
   checkUpdates: 'Verificar atualizações',
   checking: 'Verificando…',
   customize: 'Personalizar',
+  hide: 'Ocultar',
+  show: 'Mostrar',
+  hiddenTag: 'oculto',
   done: 'Concluído',
   upToDate: 'Atualizado',
   checkingUpdates: 'Verificando atualizações…',

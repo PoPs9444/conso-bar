@@ -2,6 +2,15 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.25.0] - 2026-11-02
+
+### Added
+- **Hide the cards you do not need.** In Customize, every card has **Hide** next to its arrows. A hidden card keeps its place and shows **Show** to bring it back; your choice is remembered in every conversation. A hidden System card runs no command at all.
+
+### Changed
+- **Both limits in one card.** The 5-hour and weekly limits share a single compact card, each with its ring, time to reset and forecast, and the session cost on the title line.
+- **A smaller History card.** Today and the last 7 days on one line, next to a small bar per day.
+
 ## [0.24.0] - 2026-11-02
 
 ### Added

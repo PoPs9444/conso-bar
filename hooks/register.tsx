@@ -15,7 +15,7 @@ import type { Platform, Reading } from './system'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.24.0'
+export const VERSION = '0.25.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 
@@ -28,6 +28,7 @@ const DEFAULT_ORDER: CardKey[] = ['system', 'limits', 'context', 'history', 'age
 // The default before 0.24.0: an order nobody changed moves System to the top
 const OLD_ORDER = ['limits', 'context', 'system', 'history', 'agents'].join()
 const order = atom({ plugin: 'conso-bar', key: 'order' } as const, DEFAULT_ORDER)
+const hidden = atom({ plugin: 'conso-bar', key: 'hidden' } as const, [] as CardKey[])
 const isCustomizing = atom({ plugin: 'conso-bar', key: 'isCustomizing' } as const, false)
 const updateState = atom({ plugin: 'conso-bar', key: 'update' } as const, { status: 'idle' } as UpdateState)
 const lang = atom({ plugin: 'conso-bar', key: 'lang' } as const, 'en' as Lang)
@@ -227,7 +228,8 @@ const gpuShares = (times: Map<string, number> | undefined, at: number) => {
 // One reading of the machine's load, kept as drawn (whole percents, tenths of
 // a GB): a reading that changes nothing on screen writes nothing
 const pollSystem = async ($: EngineInterface) => {
-  if (isReading) return
+  // A hidden System card costs nothing: no reading until it comes back
+  if (isReading || (await read($, hidden)).includes('system')) return
   isReading = true
   try {
     const reading = await readSystem($)
@@ -349,6 +351,12 @@ const moveCard = async ($: EngineInterface, key: CardKey, by: -1 | 1) => {
   await $.store.set('cardOrder', next)
 }
 
+// Hide a card, or bring it back where it was
+const toggleCard = async ($: EngineInterface, key: CardKey) => {
+  const next = await update($, hidden, list => (list.includes(key) ? list.filter(k => k !== key) : [...list, key]))
+  await $.store.set('hiddenCards', next)
+}
+
 // Update banner: only when GitHub has a newer version
 const updateBanner = (u: UpdateState, t: Strings) =>
   u.latest && isNewer(u.latest, VERSION) && (u.status === 'idle' || u.status === 'running' || u.status === 'done' || u.status === 'error')
@@ -400,6 +408,10 @@ export const register: Register = on => {
     await remember($, first).catch(() => undefined)
     const storedOrder = await $.store.get('cardOrder').catch(() => undefined)
     await update($, order, () => normalizeOrder(storedOrder))
+    const storedHidden = await $.store.get('hiddenCards').catch(() => undefined)
+    await update($, hidden, () =>
+      Array.isArray(storedHidden) ? storedHidden.filter((k): k is CardKey => DEFAULT_ORDER.includes(k as CardKey)) : [],
+    )
     poller?.cancel()
     poller = $.clock.every(60_000, () => void syncFromStore($).catch(() => undefined))
     // A new version on GitHub? A few seconds after start, then every 6 hours.
@@ -537,16 +549,19 @@ export const register: Register = on => {
       ]),
     }
 
-    // Customize: each block gets a header with its name and ↑ ↓ to move it
+    // Customize: each block gets a header with its name, ↑ ↓ to move it, and
+    // Hide or Show; a hidden card keeps its place and shows its header alone
     const cardOrder = await read($, order)
+    const hiddenCards = await read($, hidden)
     const customizing = await read($, isCustomizing)
     const placed = cardOrder.map((key, i) => {
-      if (!customizing) return <els.Box key={`block-${key}`} flexDirection="column" gap={1}>{blocks[key]}</els.Box>
+      const isHidden = hiddenCards.includes(key)
+      if (!customizing) return isHidden ? null : <els.Box key={`block-${key}`} flexDirection="column" gap={1}>{blocks[key]}</els.Box>
       return (
         <els.Box key={`block-${key}`} flexDirection="column" gap={1}>
           <els.Box flexDirection="row" alignItems="center" gap={1}>
             <els.Box flexGrow={1}>
-              <els.Text dimColor>{t.cards[key]}</els.Text>
+              <els.Text dimColor>{isHidden ? `${t.cards[key]} · ${t.hiddenTag}` : t.cards[key]}</els.Text>
             </els.Box>
             {i > 0 ? (
               <els.Button key={`up-${key}`} plain dimColor onPress={() => moveCard($, key, -1)}>
@@ -558,8 +573,15 @@ export const register: Register = on => {
                 ↓
               </els.Button>
             ) : null}
+            <els.Button
+              key={`${isHidden ? 'show' : 'hide'}-${key}`}
+              label={isHidden ? t.show : t.hide}
+              plain
+              dimColor
+              onPress={() => toggleCard($, key)}
+            />
           </els.Box>
-          {blocks[key] ?? <els.Text dimColor>{t.nothingYet}</els.Text>}
+          {isHidden ? null : (blocks[key] ?? <els.Text dimColor>{t.nothingYet}</els.Text>)}
         </els.Box>
       )
     })

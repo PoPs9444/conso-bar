@@ -78,6 +78,8 @@ declare module 'claude-code' {
       history: Day[]
       update: UpdateState
       order: CardKey[]
+      // cards hidden from Customize, kept in their place in the order
+      hidden: CardKey[]
       isCustomizing: boolean
       lang: Lang
       system: SystemStats | null
