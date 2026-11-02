@@ -10,12 +10,12 @@ import { STRINGS, toLang } from './i18n'
 import type { Strings } from './i18n'
 import { costOf } from './pricing'
 import { LINUX, MAC, WINDOWS, keepColors, parseLinux, parseMac, parseWindows, topApps } from './system'
-import type { Platform, Reading } from './system'
+import type { GpuClient, Platform, Reading } from './system'
 
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.26.0'
+export const VERSION = '0.26.1'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
@@ -199,8 +199,11 @@ let langPoller: { cancel: () => void } | undefined
 let systemPoller: { cancel: () => void } | undefined
 let isReading = false
 let platform: Platform | undefined
-// Each process's GPU time at the last reading, to turn into a share of the interval
-let lastGpu: { at: number; times: Map<string, number> } | undefined
+// Each GPU client's time at the last reading, to turn into a share of the interval
+let lastGpu: { at: number; clients: Map<string, GpuClient> } | undefined
+// The GPU is measured over 2 seconds at least: closer readings (a sort that
+// reads again at once) keep the last figures
+const MIN_GPU_SPAN_MS = 2000
 
 // One reading of the machine's load; undefined when the machine would not say
 const readSystem = async ($: EngineInterface): Promise<Reading | undefined> => {
@@ -214,19 +217,29 @@ const readSystem = async ($: EngineInterface): Promise<Reading | undefined> => {
   return reading.stats.cpu === undefined && reading.stats.ramUsed === undefined ? undefined : reading
 }
 
-// Each process's share of the GPU since the last reading, in percent: the GPU
-// time it gained over the time that passed. Nothing on the first reading
-const gpuShares = (times: Map<string, number> | undefined, at: number) => {
+// The GPU over the time since the last reading, in percent: each client's GPU
+// time gained over the time that passed, added up per process and in all. An
+// average over seconds, steadier than the driver's own instant figure, which
+// reads 0% between two frames of an app drawing in bursts. Nothing on the
+// first reading, nor over too short a span
+const gpuShares = (clients: Map<string, GpuClient> | undefined, at: number) => {
+  if (!clients) return undefined
   const before = lastGpu
-  lastGpu = times && { at, times }
-  if (!times || !before || at <= before.at) return undefined
+  if (before && at - before.at < MIN_GPU_SPAN_MS) return undefined
+  lastGpu = { at, clients }
+  if (!before) return undefined
   const ns = (at - before.at) * 1e6
-  const shares = new Map<string, number>()
-  for (const [pid, t] of times) {
-    const gained = t - (before.times.get(pid) ?? 0)
-    if (gained > 0) shares.set(pid, Math.min(100, (gained / ns) * 100))
+  const byPid = new Map<string, number>()
+  let total = 0
+  for (const [id, c] of clients) {
+    // A client opened since the last reading gained all of its time in between
+    const gained = c.time - (before.clients.get(id)?.time ?? 0)
+    if (gained <= 0) continue
+    const share = (gained / ns) * 100
+    byPid.set(c.pid, (byPid.get(c.pid) ?? 0) + share)
+    total += share
   }
-  return shares
+  return { byPid, total: Math.min(100, total) }
 }
 
 // One reading of the machine's load, kept as drawn (whole percents, tenths of
@@ -238,14 +251,25 @@ const pollSystem = async ($: EngineInterface) => {
   try {
     const reading = await readSystem($)
     if (!reading) return
-    const s = reading.stats
-    const shares = gpuShares(reading.gpuTimes, await $.clock.now())
+    const gpu = gpuShares(reading.gpuTimes, await $.clock.now())
+    const before = await read($, system)
+    // No span to measure the GPU over (the first reading, one right after
+    // another): the GPU and each app's share stay as last shown, so the figure
+    // never drops to 0% and its column never leaves
+    const isGpuKept = !gpu && reading.gpuTimes !== undefined && before?.gpu !== undefined
+    const s = gpu ? { ...reading.stats, gpu: gpu.total } : isGpuKept ? { ...reading.stats, gpu: before.gpu } : reading.stats
     const whole = (n: number | undefined) => (n === undefined ? undefined : Math.round(n))
     const tenth = (n: number | undefined) => (n === undefined ? undefined : Math.round(n * 10) / 10)
-    const before = await read($, system)
+    const lastShare = new Map((before?.apps ?? []).map(a => [a.name, a.gpu]))
+    const hadShares = before?.apps?.some(a => a.gpu !== undefined) ?? false
     const apps = keepColors(
       before?.apps,
-      topApps(reading.procs, s, shares, 4, await read($, appSort)).map(a => ({ name: a.name, cpu: whole(a.cpu), gpu: whole(a.gpu), ram: tenth(a.ram) })),
+      topApps(reading.procs, s, gpu?.byPid, 4, await read($, appSort)).map(a => ({
+        name: a.name,
+        cpu: whole(a.cpu),
+        gpu: isGpuKept ? (hadShares ? (lastShare.get(a.name) ?? 0) : undefined) : whole(a.gpu),
+        ram: tenth(a.ram),
+      })),
     )
     const shown: SystemStats = {
       ...s,
@@ -445,6 +469,8 @@ export const register: Register = on => {
     systemPoller = undefined
     if (e.surface !== 'terminal') {
       $.clock.after(500, () => void pollSystem($).catch(() => undefined))
+      // A second reading as soon as the GPU can be measured, not 5 seconds later
+      $.clock.after(500 + MIN_GPU_SPAN_MS + 600, () => void pollSystem($).catch(() => undefined))
       let beat = 0
       systemPoller = $.clock.every(5000, () => {
         if (platform === 'windows' && beat++ % 2 === 1) return
@@ -545,24 +571,34 @@ export const register: Register = on => {
         : null,
       system: sys
         ? frame('sys', [
-            <els.Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center">
-              <els.Svg source={sys.title} alt={t.system} width={sys.titleW} height={14} />
-              {sys.sortable.length ? (
-                <els.Box flexDirection="row" alignItems="center" columnGap={1}>
-                  <els.Text dimColor>{t.sortBy}</els.Text>
-                  {sys.sortable.map(key => (
-                    <els.Button
-                      key={`sort-${key}`}
-                      label={key.toUpperCase()}
-                      plain
-                      dimColor={sorting !== key}
-                      onPress={() => sortApps($, key)}
-                    />
-                  ))}
+            <els.Svg key="title" source={sys.title} alt={t.system} width={sys.titleW} height={14} />,
+            <els.Svg key="rings" source={sys.rings.svg} alt={sys.rings.alt} height={sys.rings.h} />,
+            // The apps' table: the names, then a column per resource, its header a
+            // button that ranks the apps by it (▾ on the one picked). Every column
+            // sits on the same bottom line, so the rows line up
+            sys.table ? (
+              <els.Box key="table" flexDirection="row" alignItems="flex-end" columnGap={1}>
+                <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
+                  <els.Svg source={sys.table.names.svg} alt={sys.table.names.alt} height={sys.table.names.h} />
                 </els.Box>
-              ) : null}
-            </els.Box>,
-            <els.Svg key="body" source={sys.svg} alt={sys.alt} height={sys.h} />,
+                {sys.table.columns.map(c => (
+                  <els.Box key={`col-${c.key}`} flexDirection="column" alignItems="center">
+                    {sys.table?.isSortable ? (
+                      <els.Button
+                        key={`sort-${c.key}`}
+                        label={sorting === c.key ? `${c.label} ▾` : c.label}
+                        plain
+                        dimColor={sorting !== c.key}
+                        onPress={() => sortApps($, c.key)}
+                      />
+                    ) : (
+                      <els.Text dimColor>{c.label}</els.Text>
+                    )}
+                    <els.Svg source={c.svg} alt={c.alt} width={c.w} height={c.h} />
+                  </els.Box>
+                ))}
+              </els.Box>
+            ) : null,
           ])
         : null,
       history: hist ? frame('hist', <els.Svg source={hist.svg} alt={hist.alt} height={hist.h} />) : null,

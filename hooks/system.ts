@@ -18,9 +18,13 @@ const pct = (n: number | undefined) => (n === undefined ? undefined : Math.min(1
 // GB, and the app it belongs to
 export type Proc = { pid: string; cpu?: number; ram: number; app: string }
 
-// One reading: the machine's figures, its processes, and on macOS each
-// process's GPU time so far (in nanoseconds), to compare with the next reading
-export type Reading = { stats: SystemStats; procs: Proc[]; gpuTimes?: Map<string, number> }
+// One GPU client on macOS: the process that opened it and its GPU time so far,
+// in nanoseconds
+export type GpuClient = { pid: string; time: number }
+
+// One reading: the machine's figures, its processes, and on macOS each GPU
+// client by its id, to compare with the next reading
+export type Reading = { stats: SystemStats; procs: Proc[]; gpuTimes?: Map<string, GpuClient> }
 
 // The app a process belongs to: the outermost .app bundle in its path (an
 // app's helpers count as the app), the system's own processes as "macOS"
@@ -39,17 +43,20 @@ export const parsePs = (out: string): Proc[] =>
     .filter((m): m is RegExpExecArray => m !== null)
     .map(m => ({ pid: m[1]!, cpu: Number(m[2]), ram: (Number(m[3]) * 1024) / GIB, app: appOf(m[4]!.trim()) }))
 
-// The GPU's clients (ioreg, filtered): each block holds its GPU time, then
-// the process that opened it
+// The GPU's clients (ioreg, filtered), each by its registry id: a client an
+// app closes takes its time with it, so time is compared client by client,
+// never as a process's total that would drop. Each block holds the id, the
+// GPU time, then the process that opened it
 export const parseGpuClients = (out: string) => {
-  const times = new Map<string, number>()
+  const clients = new Map<string, GpuClient>()
   for (const block of out.split('+-o AGXDeviceUserClient').slice(1)) {
+    const id = /id (0x[0-9a-f]+)/.exec(block)?.[1]
     const pid = /"IOUserClientCreator" = "pid (\d+)/.exec(block)?.[1]
-    if (!pid) continue
-    const t = [...block.matchAll(/"accumulatedGPUTime"=(\d+)/g)].reduce((sum, m) => sum + Number(m[1]), 0)
-    times.set(pid, (times.get(pid) ?? 0) + t)
+    if (!id || !pid) continue
+    const time = [...block.matchAll(/"accumulatedGPUTime"=(\d+)/g)].reduce((sum, m) => sum + Number(m[1]), 0)
+    clients.set(id, { pid, time })
   }
-  return times
+  return clients
 }
 
 const PS = 'ps -A -o pid=,%cpu=,rss=,comm='
@@ -61,7 +68,7 @@ export const MAC =
   'iostat -n0 -c 2 -w 1 | tail -1; echo @@; ' +
   "ioreg -r -d 1 -w 0 -c IOAccelerator | grep -o '\"Device Utilization %\"=[0-9]*\\|\"model\" = \"[^\"]*\"' | head -4; echo @@; " +
   `vm_stat; echo @@; sysctl -n hw.memsize hw.logicalcpu; echo @@; ${PS}; echo @@; ` +
-  "ioreg -r -c AGXDeviceUserClient -l -w 0 | grep -o '+-o AGXDeviceUserClient\\|\"accumulatedGPUTime\"=[0-9]*\\|\"IOUserClientCreator\" = \"pid [0-9]*'"
+  "ioreg -r -c AGXDeviceUserClient -l -w 0 | grep -o '+-o AGXDeviceUserClient  <class AGXDeviceUserClient, id 0x[0-9a-f]*\\|\"accumulatedGPUTime\"=[0-9]*\\|\"IOUserClientCreator\" = \"pid [0-9]*'"
 
 export const parseMac = (out: string): Reading => {
   const [cpuPart = '', gpuPart = '', vmPart = '', sysPart = '', psPart = '', clientsPart] = out.split('@@')

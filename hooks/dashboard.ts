@@ -343,54 +343,11 @@ export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) 
     gauge('50%', resources[1]!, gpuDetail) +
     gauge('83.33%', resources[2]!, ramDetail)
 
-  // The apps' table: a row per app with its color, then the others; a column
-  // per resource the system splits by app
-  let H = 112
-  if (apps.length) {
-    const COL = 52
-    const cols = resources.filter(r => r.isSplit)
-    const value = (label: string, v: number | undefined) =>
-      v === undefined ? '—' : label === 'RAM' ? `${gb(v)} ${t.gb}` : `${Math.round(v)}%`
-    const appValue = (r: (typeof cols)[number], a: AppLoad) => value(r.label, r.label === 'RAM' ? a.ram : r.share(a))
-    const otherValue = (r: (typeof cols)[number]) => {
-      if (r.label === 'RAM') return value('RAM', sys.ramUsed === undefined ? undefined : Math.max(0, sys.ramUsed - sum(apps.map(a => a.ram))))
-      return value(r.label, r.p === undefined ? undefined : Math.max(0, r.p - sum(apps.map(a => r.share(a)))))
-    }
-    const colX = (i: number) => -(cols.length - 1 - i) * COL
-    const rows = [
-      ...apps.map((a, i) => ({ name: a.name, color: appColor(a, i), isOther: false, cells: cols.map(r => appValue(r, a)) })),
-      { name: t.other, color: OTHER_COLOR, isOther: true, cells: cols.map(otherValue) },
-    ]
-    const y0 = 160
-    H = y0 + (rows.length - 1) * 18 + 6
-    body +=
-      `<rect class="trackfill" x="0" y="124" width="100%" height="1"/>` +
-      right(
-        cols
-          .map((r, i) => {
-            const isSorted = sort === r.label.toLowerCase()
-            return `<text class="${isSorted ? 't1' : 't3'}" x="${colX(i)}" y="142" text-anchor="end" font-size="10" font-weight="600" letter-spacing=".6">${isSorted ? '▾ ' : ''}${r.label}</text>`
-          })
-          .join(''),
-      ) +
-      fadeRight(
-        H,
-        (cols.length - 1) * COL + 52,
-        rows
-          .map((row, i) => `<text class="${row.isOther ? 't3' : 't1'}" x="14" y="${y0 + i * 18}" font-size="12">${esc(row.name)}</text>`)
-          .join(''),
-      ) +
-      rows.map((row, i) => `<circle cx="4" cy="${y0 + i * 18 - 4}" r="3.5" fill="${row.color}"/>`).join('') +
-      right(
-        rows
-          .map((row, i) =>
-            row.cells
-              .map((cell, j) => `<text class="${row.isOther ? 't3' : 't2'}" x="${colX(j)}" y="${y0 + i * 18}" text-anchor="end" font-size="11.5">${esc(cell)}</text>`)
-              .join(''),
-          )
-          .join(''),
-      )
-  }
+  // The rings end on a thin rule; the apps' table comes under it, in columns
+  // the panel lays out: the names, then one column per resource the system
+  // splits by app, its header a button that ranks the apps by it
+  const H = 130
+  body += apps.length ? `<rect class="trackfill" x="0" y="124" width="100%" height="1"/>` : ''
 
   const figure = (p: number | undefined) => (p === undefined ? t.na : pct(p))
   const ram = sys.ramUsed !== undefined && sys.ramTotal ? `${gb(sys.ramUsed)} / ${gb(sys.ramTotal)} ${t.gb}` : t.na
@@ -410,16 +367,57 @@ export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) 
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${titleW} 14" width="${titleW}" height="14">` +
     `<style>${STYLE}</style>${title(0, 11, name)}</svg>`
   const TOP = 24
-  const sortable = apps.length ? resources.filter(r => r.isSplit).map(r => r.label.toLowerCase() as AppSort) : []
-  return {
-    svg: fluid(H - TOP, `<g transform="translate(0 ${-TOP})">${body}</g>`),
-    h: H - TOP,
-    title: inline(head),
-    titleW,
-    // the columns worth ranking by: two at least
-    sortable: sortable.length > 1 ? sortable : [],
+  const rings = {
+    svg: fluid((apps.length ? H : 112) - TOP, `<g transform="translate(0 ${-TOP})">${body}</g>`),
+    h: (apps.length ? H : 112) - TOP,
     alt: `${t.system}: CPU ${figure(sys.cpu)}, GPU ${figure(sys.gpu)}, RAM ${ram}${appsAlt ? `. ${appsAlt}` : ''}`,
   }
+  if (!apps.length) return { title: inline(head), titleW, rings, table: null }
+
+  const cols = resources.filter(r => r.isSplit)
+  const value = (label: string, v: number | undefined) =>
+    v === undefined ? '—' : label === 'RAM' ? `${gb(v)} ${t.gb}` : `${Math.round(v)}%`
+  const appValue = (r: (typeof cols)[number], a: AppLoad) => value(r.label, r.label === 'RAM' ? a.ram : r.share(a))
+  const otherValue = (r: (typeof cols)[number]) => {
+    if (r.label === 'RAM') return value('RAM', sys.ramUsed === undefined ? undefined : Math.max(0, sys.ramUsed - sum(apps.map(a => a.ram))))
+    return value(r.label, r.p === undefined ? undefined : Math.max(0, r.p - sum(apps.map(a => r.share(a)))))
+  }
+  const rows = [
+    ...apps.map((a, i) => ({ name: a.name, color: appColor(a, i), isOther: false, cells: cols.map(r => appValue(r, a)) })),
+    { name: t.other, color: OTHER_COLOR, isOther: true, cells: cols.map(otherValue) },
+  ]
+  // Every column the same height, one row each 18 px, so they line up
+  const ROW = 18
+  const TH = (rows.length - 1) * ROW + 17
+  const y = (i: number) => 13 + i * ROW
+  const names = {
+    svg: fluid(
+      TH,
+      fadeRight(TH, 0, rows.map((row, i) => `<text class="${row.isOther ? 't3' : 't1'}" x="14" y="${y(i)}" font-size="12">${esc(row.name)}</text>`).join('')) +
+        rows.map((row, i) => `<circle cx="4" cy="${y(i) - 4}" r="3.5" fill="${row.color}"/>`).join(''),
+    ),
+    h: TH,
+    alt: rows.map(row => row.name).join(', '),
+  }
+  // A column's figures centered under its header button, whatever the button's
+  // own width and padding
+  const COL = 52
+  const columns = cols.map((r, j) => ({
+    key: r.label.toLowerCase() as AppSort,
+    label: r.label,
+    w: COL,
+    h: TH,
+    alt: `${r.label}: ${rows.map(row => row.cells[j]).join(', ')}`,
+    svg: inline(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${COL} ${TH}" width="${COL}" height="${TH}"><style>${STYLE}</style>` +
+        rows
+          .map((row, i) => `<text class="${row.isOther ? 't3' : 't2'}" x="${COL / 2}" y="${y(i)}" text-anchor="middle" font-size="11.5">${esc(row.cells[j]!)}</text>`)
+          .join('') +
+        `</svg>`,
+    ),
+  }))
+  // Ranking needs two columns at least
+  return { title: inline(head), titleW, rings, table: { names, columns, isSortable: columns.length > 1 } }
 }
 
 // Context card content (the title and the Compact button sit above it): the
