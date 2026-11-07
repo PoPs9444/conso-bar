@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { VERSION } from '../hooks/register'
+import { heat } from '../hooks/dashboard'
 import { appOf, gpuShort, keepColors, parseGpuClients, parseLinux, parseMac, parseWindows, pickGpu, topApps } from '../hooks/system'
 
 const USAGE = {
@@ -817,6 +818,12 @@ test('the System card comes first, with each app\'s share of the machine', async
   expect(card()).toContain('System: CPU 25%, GPU 20%')
   expect(card()).toContain('Claude: CPU 7%, GPU 20%, RAM 3.5 GB')
   expect(card()).toContain('macOS: CPU 1%, GPU 0%')
+  // Each app's figure in the color of its share, Other in grey
+  const cpu = String((await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('CPU:'))?.props.source)
+  expect(cpu.includes(encodeURIComponent(`fill="${heat(7)}"`)) || cpu.includes(`fill="${heat(7)}"`)).toBe(true)
+  // The figures' columns never shrink, so each row stays level with its app
+  const boxes = await ui.findAll({ type: 'Box' })
+  expect(boxes.filter(x => x.props.flexShrink === 0 && x.props.minWidth === 52).length).toBe(3)
   await ui.unmount()
 })
 

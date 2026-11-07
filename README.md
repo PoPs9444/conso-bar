@@ -94,7 +94,7 @@ Restart Claude Code. The **Conso** panel opens on the right at the start of ever
 
 | Card | What it shows |
 | --- | --- |
-| **System** | Three rings for CPU, GPU and memory in use, each cut into a colored quarter per app, and a table of the four apps using the most with their share of each. Click its **CPU**, **GPU** or **RAM** header to rank them by that column. |
+| **System** | Three rings for CPU, GPU and memory in use, each cut into a colored quarter per app, and a table of the four apps using the most with their share of each, colored from green to red as it nears the whole machine. Click its **CPU**, **GPU** or **RAM** header to rank them by that column. |
 | **Limits** | Your 5-hour and weekly usage in one card: a green-to-red ring for each, the time until it resets, a forecast, and the session cost. |
 | **Context** | Percentage and tokens used out of the window, a green-to-red gradient bar, and the **Compact** button. |
 | **History** | Today's cost, the last 7 days' total, and a small bar per day, from green for a light day to red for the heaviest. |
