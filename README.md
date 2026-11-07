@@ -98,7 +98,7 @@ Restart Claude Code. The **Conso** panel opens on the right at the start of ever
 | **Limits** | Your 5-hour and weekly usage in one card: a green-to-red ring for each, the time until it resets, a forecast, and the session cost. |
 | **Context** | Percentage and tokens used out of the window, a green-to-red gradient bar, and the **Compact** button. |
 | **History** | Today's cost, the last 7 days' total, and a small bar per day, from green for a light day to red for the heaviest. |
-| **Agents** | Every agent of the session, live. Running ones first. |
+| **Agents** | The session's agents, live: running ones first, then the latest finished, ten at most, the rest counted on one line. |
 
 Color is kept for the numbers that matter: percentages turn from green to red as they approach 100%, each model family has its own color (Fable red, Opus violet, Sonnet blue, Haiku teal), and each app in the System card keeps its color while it stays among the top four.
 

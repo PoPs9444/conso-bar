@@ -1,6 +1,6 @@
 import type { AgentRun } from '../types'
 
-import { HEX, STYLE, esc, fadeRight, fluid, heat, inline, num, title, titleWidth } from './dashboard'
+import { HEX, drawing, esc, fadeRight, fluid, heat, num, title, titleWidth } from './dashboard'
 import type { Strings } from './i18n'
 
 // Live agents card: model, effort, duration, activity, cost
@@ -86,6 +86,9 @@ const compactNum = (n: number) => (n >= 1000 ? `${num(n / 1000, n >= 10_000 ? 0 
 const money = (usd: number) => (usd >= 1 ? usd.toFixed(2) : usd >= 0.01 ? usd.toFixed(3) : usd.toFixed(4))
 
 const clip = (t: string, max: number) => (t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t)
+
+// Rows drawn at most; the rest are counted on one line
+export const MAX_ROWS = 10
 
 const AGENT_STYLE = `
   .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
@@ -239,7 +242,11 @@ export const agentsCard = (list: readonly AgentRun[], now: number, t: Strings) =
   const agents = list.map(a => sound(a, now))
   const running = agents.filter(a => a.status === 'running')
   const finished = agents.filter(a => a.status !== 'running')
-  const shown = [...running, ...[...finished].reverse()]
+  // The running ones first, then the latest finished, up to a panel's worth:
+  // every row is a few drawings, and a long session would make each redraw heavy
+  const ordered = [...running, ...[...finished].reverse()]
+  const shown = ordered.slice(0, MAX_ROWS)
+  const hiddenCount = ordered.length - shown.length
 
   // The counter right after the title, whatever the title's length
   const name = t.agents.toUpperCase()
@@ -252,9 +259,7 @@ export const agentsCard = (list: readonly AgentRun[], now: number, t: Strings) =
         ? `<text class="t3" x="${cx}" y="11" font-size="11">${esc(label)}</text>`
         : ''
   const headW = cx + Math.ceil(label.length * 6.6) + 4
-  const head =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${headW} 14" width="${headW}" height="14">` +
-    `<style>${STYLE}</style>${title(0, 11, name)}${count}</svg>`
+  const head = drawing(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${headW} 14" width="${headW}" height="14">`, title(0, 11, name) + count)
 
   // A row that cannot be drawn is left out, never the whole panel
   let drawn = 0
@@ -274,6 +279,9 @@ export const agentsCard = (list: readonly AgentRun[], now: number, t: Strings) =
   })
 
   const empty = fluid(18, `<text class="t3" x="0" y="13" font-size="12">${esc(t.noAgents)}</text>`)
+  const more = hiddenCount > 0
+    ? { svg: fluid(16, `<text class="t3" x="24" y="12" font-size="11.5">${esc(t.moreAgents(hiddenCount))}</text>`), h: 16, alt: t.moreAgents(hiddenCount) }
+    : null
 
-  return { head: inline(head), headW, rows, empty, emptyH: 18, finished: finished.length }
+  return { head, headW, rows, more, empty, emptyH: 18, finished: finished.length }
 }
