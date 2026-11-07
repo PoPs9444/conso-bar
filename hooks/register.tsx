@@ -5,7 +5,7 @@ import type { AgentRun, AppSort, CardKey, Day, Lang, Limit, Snapshot, SystemStat
 
 import { agentsCard, nextLayout } from './agents'
 
-import { HEX, contextCard, footerLine, heat, historyCard, left, limitCards, systemCard, updateCard } from './dashboard'
+import { HEX, contextCard, footerLine, heat, historyCard, left, limitCards, systemCard, tokens, updateCard } from './dashboard'
 import { STRINGS, toLang } from './i18n'
 import type { Strings } from './i18n'
 import { costOf } from './pricing'
@@ -15,7 +15,7 @@ import type { GpuClient, Platform, Proc, Reading } from './system'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.29.1'
+export const VERSION = '0.30.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
@@ -40,6 +40,11 @@ const isCustomizing = atom({ plugin: 'conso-bar', key: 'isCustomizing' } as cons
 const updateState = atom({ plugin: 'conso-bar', key: 'update' } as const, { status: 'idle' } as UpdateState)
 const lang = atom({ plugin: 'conso-bar', key: 'lang' } as const, 'en' as Lang)
 const system = atom({ plugin: 'conso-bar', key: 'system' } as const, null as SystemStats | null)
+// The copy of this module that last started the session. An update that lands
+// while a session starts can leave the former copy's timers running: at its
+// next beat, a copy that is no longer the owner stops them
+const owner = atom({ plugin: 'conso-bar', key: 'owner' } as const, '')
+const INSTANCE = Math.random().toString(36).slice(2)
 
 // The words in the language Claude Code is set to
 const words = async ($: EngineInterface): Promise<Strings> => STRINGS[await read($, lang)]
@@ -98,8 +103,6 @@ const bar = (p: number) => {
 
 const num = (n: number, digits: number) => n.toFixed(digits)
 
-const tokens = (n: number) =>
-  n >= 1_000_000 ? `${num(n / 1_000_000, n % 1_000_000 === 0 ? 0 : 1)}M` : `${Math.round(n / 1000)}k`
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
@@ -149,6 +152,8 @@ const remember = async ($: EngineInterface, s: Snapshot) => {
   if (delta !== 0) {
     // A cost that goes down (the session restarted from zero) re-bases without adding anything
     if (delta > 0) days[dayKey(now)] = (days[dayKey(now)] ?? 0) + delta
+    // Moved to the end: the 50 kept are the latest seen, never a session still open
+    delete seen[sid]
     seen[sid] = s.usd
     const keepDays = Object.fromEntries(Object.entries(days).sort().slice(-30))
     const keepSeen = Object.fromEntries(Object.entries(seen).slice(-50))
@@ -193,29 +198,28 @@ const syncTicker = async ($: EngineInterface, list: readonly AgentRun[]) => {
 // highlight for an instant at each drawing: those details show every 5
 // seconds, with the System card's reading. An agent that starts, ends or
 // stops shows at once
-let isViewBehind = false
 const outline = (list: readonly AgentRun[]) => list.map(a => `${a.id} ${a.status} ${a.isStopping ? 1 : 0} ${a.description}`).join('\n')
-const showAgents = async ($: EngineInterface, list: readonly AgentRun[]) => {
+// Always the latest list, never one an earlier write handed over: two agents
+// writing at once would otherwise leave the older list on show
+const showAgents = async ($: EngineInterface) => {
+  const list = await read($, agents)
   const shown = await read($, agentView)
-  if (shown !== null && outline(shown) === outline(list)) {
-    isViewBehind = true
-    return
-  }
-  isViewBehind = false
+  if (shown !== null && outline(shown) === outline(list)) return
   await update($, agentView, () => [...list])
   await syncTicker($, list)
 }
 const catchUpAgents = async ($: EngineInterface) => {
-  if (!isViewBehind) return
-  isViewBehind = false
   const list = await read($, agents)
+  const shown = await read($, agentView)
+  if (shown !== null && same(shown, list)) return
   await update($, agentView, () => [...list])
+  await syncTicker($, list)
 }
 
 // Every write of the agents goes through here, then to the card
 const setAgents = async ($: EngineInterface, fn: (list: AgentRun[]) => AgentRun[]) => {
   const list = await update($, agents, fn)
-  await showAgents($, list)
+  await showAgents($)
   return list
 }
 
@@ -248,6 +252,21 @@ let poller: { cancel: () => void } | undefined
 let updatePoller: { cancel: () => void } | undefined
 let langPoller: { cancel: () => void } | undefined
 let systemPoller: { cancel: () => void } | undefined
+const retire = () => {
+  for (const t of [poller, updatePoller, langPoller, systemPoller, ticker]) t?.cancel()
+  poller = updatePoller = langPoller = systemPoller = ticker = undefined
+}
+// Each beat runs only for the owner; a former copy retires at once
+const beat = ($: EngineInterface, work: () => unknown) => () =>
+  void read($, owner)
+    .then(o => (o === INSTANCE ? work() : retire()))
+    .catch(() => undefined)
+// Nothing to measure while the panel is closed: the next beat after it
+// opens again reads at once
+const isPaneOpen = async ($: EngineInterface) => {
+  const panes = await $.ui.panes().catch(() => undefined)
+  return panes === undefined || panes.some(p => p.id === PANE && p.isPlaced)
+}
 let isReading = false
 let platform: Platform | undefined
 // Each GPU client's time at the last reading, to turn into a share of the interval
@@ -334,8 +353,13 @@ const showSystem = async ($: EngineInterface) => {
 
 // One reading of the machine's load
 const pollSystem = async ($: EngineInterface) => {
-  // A hidden System card costs nothing: no reading until it comes back
-  if (isReading || (await read($, hidden)).includes('system')) return
+  // A hidden System card costs nothing: no reading until it comes back, and
+  // the GPU is then measured afresh, not averaged over the whole pause
+  if (isReading) return
+  if ((await read($, hidden)).includes('system')) {
+    lastGpu = undefined
+    return
+  }
   isReading = true
   try {
     const reading = await readSystem($)
@@ -383,9 +407,13 @@ const checkUpdate = async ($: EngineInterface, isManual = false) => {
     if (!r.ok) throw new Error(t.githubAnswered(r.status))
     const latest = String((JSON.parse(r.text) as { version?: unknown }).version ?? '')
     if (!/^\d+(\.\d+)*$/.test(latest)) throw new Error(t.noVersion)
-    // Already installed from another conversation: it only waits for the next one
-    const installed = await $.store.get('installedVersion').catch(() => undefined)
-    const status = !isNewer(latest, VERSION) ? 'current' : installed === latest ? 'done' : 'idle'
+    // Installed from another conversation since this one started: it only
+    // waits for the next one. Installed before, yet still not running here:
+    // it did not take, and Update is offered again
+    const installed = (await $.store.get('installedVersion').catch(() => undefined)) as { version?: string; at?: number } | string | undefined
+    const since = (await $.session.usage().catch(() => undefined))?.startedAt ?? 0
+    const isWaiting = typeof installed === 'object' && installed?.version === latest && (installed.at ?? 0) >= since
+    const status = !isNewer(latest, VERSION) ? 'current' : isWaiting ? 'done' : 'idle'
     result = u => (u.status === 'running' || u.status === 'done' ? u : { latest, status, message: undefined })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -421,9 +449,10 @@ const UPDATE_PS =
 // takes effect in the next one
 const runUpdate = async ($: EngineInterface) => {
   const t = await words($)
-  const cur = await read($, updateState)
-  if (cur.status === 'running') return
-  await update($, updateState, (u): UpdateState => ({ ...u, status: 'running' }))
+  // Taken in one write: a second press before the redraw finds it running
+  let isTaken = false
+  const cur = await update($, updateState, (u): UpdateState => ((isTaken = u.status !== 'running'), isTaken ? { ...u, status: 'running' } : u))
+  if (!isTaken) return
   try {
     const argv =
       (await platformOf($)) === 'windows' ? ['powershell', '-NoProfile', '-Command', UPDATE_PS] : ['sh', '-c', UPDATE_SH]
@@ -431,7 +460,7 @@ const runUpdate = async ($: EngineInterface) => {
     if (r.exitCode === 127) throw new Error(t.noClaude)
     if (r.exitCode !== 0) throw new Error((r.stderr || r.stdout).trim().split('\n').pop() || `code ${r.exitCode}`)
     await update($, updateState, (u): UpdateState => ({ ...u, status: 'done', message: undefined }))
-    if (cur.latest) await $.store.set('installedVersion', cur.latest)
+    if (cur.latest) await $.store.set('installedVersion', { version: cur.latest, at: await $.clock.now() })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     await update($, updateState, (u): UpdateState => ({ ...u, status: 'error', message }))
@@ -548,17 +577,18 @@ export const register: Register = on => {
     await update($, hidden, () =>
       Array.isArray(storedHidden) ? storedHidden.filter((k): k is CardKey => DEFAULT_ORDER.includes(k as CardKey)) : [],
     )
+    await update($, owner, () => INSTANCE)
     poller?.cancel()
-    poller = $.clock.every(60_000, () => void syncFromStore($).catch(() => undefined))
+    poller = $.clock.every(60_000, beat($, () => syncFromStore($).catch(() => undefined)))
     // A new version on GitHub? A few seconds after start, then every 6 hours.
     // On a timer, not inside this hook: work left running after the hook
     // returns is cut off, and the check would never land
     $.clock.after(3000, () => void checkUpdate($).catch(() => undefined))
     updatePoller?.cancel()
-    updatePoller = $.clock.every(6 * 3_600_000, () => void checkUpdate($).catch(() => undefined))
+    updatePoller = $.clock.every(6 * 3_600_000, beat($, () => checkUpdate($).catch(() => undefined)))
     // The language again every 10 minutes, should it change in the meantime
     langPoller?.cancel()
-    langPoller = $.clock.every(600_000, () => void syncLang($).catch(() => undefined))
+    langPoller = $.clock.every(600_000, beat($, () => syncLang($).catch(() => undefined)))
     // Agents still running (after a reload): their times change layout on time
     void read($, agents)
       .then(l => syncTicker($, l))
@@ -573,14 +603,18 @@ export const register: Register = on => {
       $.clock.after(500 + MIN_GPU_SPAN_MS + 600, () => void pollSystem($).catch(() => undefined))
       // The agents' details catch up on the same beat, after the reading: one
       // drawing for both
-      let beat = 0
-      systemPoller = $.clock.every(5000, () => {
-        const isSkipped = platform === 'windows' && beat++ % 2 === 1
-        void (isSkipped ? Promise.resolve() : pollSystem($))
-          .catch(() => undefined)
-          .then(() => catchUpAgents($))
-          .catch(() => undefined)
-      })
+      let n = 0
+      systemPoller = $.clock.every(
+        5000,
+        beat($, async () => {
+          const isOpen = await isPaneOpen($)
+          // Closed: the GPU is measured afresh when it opens, not over the pause
+          if (!isOpen) lastGpu = undefined
+          const isSkipped = (platform === 'windows' && n++ % 2 === 1) || !isOpen
+          await (isSkipped ? undefined : pollSystem($).catch(() => undefined))
+          await catchUpAgents($).catch(() => undefined)
+        }),
+      )
     }
     return r
   })
@@ -588,6 +622,8 @@ export const register: Register = on => {
   on('command.run', { command: 'conso' }, async $ => {
     await syncLang($).catch(() => undefined)
     await $.ui.open({ id: PANE, title: 'Conso' })
+    // Opened again after a close: a fresh reading at once, not at the next beat
+    $.clock.after(0, () => void pollSystem($).catch(() => undefined))
     return { text: (await words($)).opened }
   })
 
@@ -654,8 +690,10 @@ export const register: Register = on => {
       // as soon as Claude is idle. Started on a timer so the press returns at
       // once: a compaction outlasts the time a press may take
       const compact = async () => {
-        if (await read($, isCompacting)) return
-        await update($, isCompacting, () => true)
+        // Taken in one write: a second press before the redraw finds it taken
+        let isTaken = false
+        await update($, isCompacting, v => ((isTaken = !v), true))
+        if (!isTaken) return
         $.clock.after(0, () => {
           void $.command
             .run({ command: 'compact' })
@@ -747,6 +785,7 @@ export const register: Register = on => {
               <els.Svg source={r.bottom.svg} alt={r.bottom.alt} height={r.bottom.h} />
             </els.Box>
           )),
+          ag.more ? <els.Svg key="more" source={ag.more.svg} alt={ag.more.alt} height={ag.more.h} /> : null,
         ]),
       }
 
@@ -867,7 +906,15 @@ export const register: Register = on => {
       await setAgents($, cur => {
         const seen = cur.find(a => a.id === run.id)
         // Already seen through its first step: just give it its name
-        if (seen) return cur.map(a => (a === seen ? { ...a, description: run.description, type: run.type, prompt: run.prompt } : a))
+        if (seen) {
+          // Resumed (SendMessage, a teammate woken): it runs again from now
+          const again = e.resume !== undefined && seen.status !== 'running'
+          return cur.map(a =>
+            a === seen
+              ? { ...a, description: run.description, type: run.type, prompt: run.prompt, ...(again ? { status: 'running' as const, startedAt: now, endedAt: undefined, isStopping: false } : {}) }
+              : a,
+          )
+        }
         return [...cur, run].slice(-50)
       })
     }
@@ -880,8 +927,15 @@ export const register: Register = on => {
     const id = e.agentId
     if (id !== undefined) {
       const head = e.text.slice(0, 200)
+      const now = await $.clock.now()
       await setAgents($, list => {
-        if (list.some(a => a.id === id)) return list
+        // A finished agent that starts a turn again runs again
+        const known = list.find(a => a.id === id)
+        if (known) {
+          return known.status === 'running'
+            ? list
+            : list.map(a => (a === known ? { ...a, status: 'running', startedAt: now, endedAt: undefined, isStopping: false } : a))
+        }
         const spawn = list.find(a => !a.isLinked && a.status === 'running' && a.prompt === head)
         return spawn ? list.map(a => (a === spawn ? { ...a, id, isLinked: true } : a)) : list
       })

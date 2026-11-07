@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { VERSION } from '../hooks/register'
-import { heat } from '../hooks/dashboard'
+import { heat, tokens } from '../hooks/dashboard'
 import { appOf, gpuShort, keepColors, parseGpuClients, parseLinux, parseMac, parseWindows, pickGpu, topApps } from '../hooks/system'
 
 const USAGE = {
@@ -53,7 +53,7 @@ test('the panel shows the cards', async ($, on) => {
   // Both limits in one card, the session cost on its title line
   expect(alts).toContain('5-hour limit: 42%, 100% in ≈ 2h 46m. Weekly limit: 61%, 100% in ≈ 1d 22h. Session: $1.23')
   const source = svgs.map(x => String(x.props.source)).join('')
-  expect(source.includes('>3h 0m<')).toBe(true)
+  expect(source.includes('>3h 00m<')).toBe(true)
   expect(source.includes('$1.23')).toBe(true)
   // 42% in 2h out of 5h; 61% in 3d out of 7d: forecast from the average
   expect(source.includes('100% in ≈ 2h 46m')).toBe(true)
@@ -329,6 +329,49 @@ test('a panel that cannot be drawn says why, and never stays blank', async ($, o
   await ui.unmount()
 })
 
+test('at most 10 agent rows, running first, the rest counted on one line', async ($, on) => {
+  const runs = Array.from({ length: 14 }, (_, i) => ({
+    id: `a${i}`, isLinked: true, usd: 0, description: `Task ${i}`, type: 'Explore', model: 'claude-opus-5-5',
+    status: i === 0 ? 'running' : 'done', startedAt: 0, endedAt: 1000, steps: 1, outputTokens: 0,
+  }))
+  on('state.get', (_: unknown, e: { key: string }, next: (e: unknown) => unknown) =>
+    e.key === 'agentRuns' ? { value: { value: runs, version: 1 } } : next(e),
+  )
+  await setup($, on)
+  const ui = await $.ui.mount(PANE)
+  const alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  const rows = alts.filter(a => a.startsWith('Task '))
+  expect(rows.length).toBe(10)
+  // The running one first, then the latest finished
+  expect(rows[0]!.startsWith('Task 0:')).toBe(true)
+  expect(rows[1]!.startsWith('Task 13:')).toBe(true)
+  expect(alts).toContain('and 4 more')
+  await ui.unmount()
+})
+
+test('no reading of the machine while the panel is closed, one at once when it opens', async ($, on) => {
+  let runs = 0
+  let isOpen = true
+  on('ui.panes', () => ({ value: isOpen ? [{ id: 'conso', title: 'Conso', isShown: true, isFocused: false, isPlaced: true }] : [] }))
+  on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'HOME' ? '/Users/someone' : undefined }))
+  on('fs.exists', () => ({ value: false }))
+  on('process.run', (_: unknown, e: { argv: string[] }) => {
+    if (e.argv[0] === 'sh') runs++
+    return { value: e.argv[0] === 'sh' ? { exitCode: 0, stdout: macOut(1e9), stderr: '' } : { exitCode: 1, stdout: '', stderr: '' } }
+  })
+  await setup($, on)
+  await clock.advance(10_000)
+  const open = runs
+  expect(open > 0).toBe(true)
+  isOpen = false
+  await clock.advance(20_000)
+  expect(runs).toBe(open)
+  isOpen = true
+  await $.command.run({ command: 'conso' })
+  await clock.advance(10)
+  expect(runs).toBe(open + 1)
+})
+
 test('a newer version on GitHub shows the update banner', async ($, on) => {
   on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
   await setup($, on)
@@ -467,7 +510,8 @@ test('Update installs in the background and posts nothing in the conversation', 
 test('another conversation sees the version already installed', async ($, on) => {
   on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
   const c = mock.clock(on, { now: Date.parse('2026-11-01T00:00:00Z') })
-  mock.store(on, { installedVersion: '99.0.0' })
+  // Installed by another conversation after this one started
+  mock.store(on, { installedVersion: { version: '99.0.0', at: USAGE.startedAt + 1 } })
   on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
   on('session.usage', () => ({ value: USAGE }))
   on('session.id', () => ({ value: 'session-test' }))
@@ -483,6 +527,23 @@ test('another conversation sees the version already installed', async ($, on) =>
   expect((await ui2.findAll({ type: 'Button' })).map(b => b.text)).not.toContain('Update')
   expect((await ui2.findAll({ type: 'Svg' })).map(x => String(x.props.alt))).toContain('v99.0.0 installed. Takes effect in your next conversation')
   await ui2.unmount()
+})
+
+test('an install that did not take offers Update again', async ($, on) => {
+  on('http.fetch', () => ({ value: { ok: true, status: 200, headers: {}, text: '{ "version": "99.0.0" }' } }))
+  const c = mock.clock(on, { now: Date.parse('2026-11-01T00:00:00Z') })
+  // Installed before this conversation started, yet this one still runs the old version
+  mock.store(on, { installedVersion: { version: '99.0.0', at: 5 } })
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { ...USAGE, startedAt: 10 } }))
+  on('session.id', () => ({ value: 'session-test' }))
+  on('command.register', () => ({ value: { command: 'conso' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await c.advance(3000)
+  const ui = await $.ui.mount(PANE)
+  expect((await ui.findAll({ type: 'Button' })).map(b => b.text).some(x => x.includes('Update'))).toBe(true)
+  await ui.unmount()
 })
 
 // ---- Language: English by default, Claude Code's language when it is set
@@ -598,6 +659,50 @@ test("an agent's steps still reach the card", async ($, on) => {
   expect(alts.some(a => a.startsWith('Scout the repo: Haiku 5.5'))).toBe(true)
   expect(alts.filter(a => a.includes(': Opus 5.5')).length).toBe(0)
   await ui.unmount()
+})
+
+test('an agent that finished and starts a turn again shows as running', async ($, on) => {
+  on('agent.list', () => ({ value: [{ id: 'a1', name: 'Scout', description: 'Scout the repo', type: 'Explore', status: 'running' }] }))
+  on('turn.step', async function* () {
+    return { turnId: 't', index: 0, answer: '', toolUses: [], stopReason: 'end_turn', usage: null }
+  } as never)
+  on('turn.start', (_: unknown, e: { turnId: string }) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  await setup($, on)
+  const turn = $.turn as never as {
+    step: (e: unknown) => AsyncIterable<unknown>
+    start: (e: unknown) => Promise<unknown>
+    complete: (e: unknown) => Promise<unknown>
+  }
+  for await (const _ of turn.step({ turnId: 't', index: 0, model: 'claude-haiku-5-5', messageCount: 1, agentId: 'a1' })) {
+    // nothing
+  }
+  await turn.complete({ turnId: 't', agentId: 'a1', reason: 'answer', answer: '' })
+  const row = async () => {
+    const ui = await $.ui.mount(PANE)
+    const alt = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt)).find(a => a.startsWith('Scout the repo:'))
+    await ui.unmount()
+    return alt
+  }
+  expect(await row()).toContain('Done')
+  // A message wakes it: a new turn
+  await turn.start({ turnId: 't2', agentId: 'a1', text: 'carry on' })
+  expect(await row()).toContain('Running')
+})
+
+test('token counts: no 1000k, no 0k', () => {
+  expect(tokens(850)).toBe('850')
+  expect(tokens(12_400)).toBe('12k')
+  expect(tokens(999_700)).toBe('1M')
+  expect(tokens(1_000_000)).toBe('1M')
+  expect(tokens(1_500_000)).toBe('1.5M')
+})
+
+test('a Mac with no GPU clients to time keeps the GPU\'s own utilization', () => {
+  const out = macOut(5000).split('@@').slice(0, 5).join('@@') + '@@\n'
+  const { stats, gpuTimes } = parseMac(out)
+  expect(gpuTimes).toBe(undefined)
+  expect(stats.gpu).toBe(26)
 })
 
 test('history bars go from green to red with what each day cost', async ($, on) => {

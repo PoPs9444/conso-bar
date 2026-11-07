@@ -2,6 +2,24 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.30.0] - 2026-11-07
+
+### Improved
+- **Lighter panel, even in long sessions.** The Agents card shows at most ten rows (running ones first, then the latest finished) and counts the rest on one line, and every drawing carries only the styles it uses. With 50 agents, each redraw goes from about 450 KB to 73 KB, so a busy conversation's panel stays quick.
+- **Nothing measured while the panel is closed.** The machine is no longer read every 5 seconds behind a closed panel; reopening it with `/conso` reads it at once.
+- **Clean after an update.** A copy of Conso left running by an update that landed while a conversation started now stops by itself.
+
+### Fixed
+- **A resumed agent shows as running again.** An agent woken by a message after it finished stayed "Done", with no Stop button and a frozen time.
+- **An agent's row no longer sticks at "Running".** Two agents finishing at the same moment could leave the older list on screen.
+- **No cost counted twice in History** for a conversation left open while many others started.
+- **The apps table survives a non-English system language.** With a French or German locale, macOS and Linux wrote decimals with a comma and the table emptied. Readings now always use a point.
+- **GPU on Windows in any language.** When the translated GPU counter is missing, Conso reads the same figures from a class whose name never changes. The reading's own PowerShell no longer shows up among the apps.
+- **GPU on Intel and AMD Macs.** The GPU's own utilization stands instead of dropping to 0%.
+- **An update that did not take offers Update again**, instead of saying "installed" forever.
+- **One compaction and one install per press**, however quickly the button is pressed twice.
+- **Consistent figures.** Token counts never read "1000k" or "0k"; hours and minutes are always written "2h 05m"; "0 steps" in the plural where the language wants it; an empty Windows figure shows "—" rather than 0%.
+
 ## [0.29.1] - 2026-11-07
 
 ### Fixed

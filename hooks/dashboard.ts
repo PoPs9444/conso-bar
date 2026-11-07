@@ -38,7 +38,7 @@ export const left = (resetsAt: string | undefined, now: number, u: Strings['unit
   if (!resetsAt) return ''
   const d = Math.max(0, (Date.parse(resetsAt) - now) / 1000)
   if (d >= 86400) return `${Math.floor(d / 86400)}${u.d} ${Math.floor((d % 86400) / 3600)}${u.h}`
-  if (d >= 3600) return `${Math.floor(d / 3600)}${u.h} ${Math.floor((d % 3600) / 60)}${u.m}`
+  if (d >= 3600) return `${Math.floor(d / 3600)}${u.h} ${String(Math.floor((d % 3600) / 60)).padStart(2, '0')}${u.m}`
   return `${Math.floor(d / 60)}${u.m}`
 }
 
@@ -46,8 +46,9 @@ export const left = (resetsAt: string | undefined, now: number, u: Strings['unit
 export const dollars = (usd: number) =>
   usd >= 100 ? `$${String(Math.round(usd)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}` : `$${usd.toFixed(2)}`
 
+// 850, 12k, 1M, 1.5M: never 1000k, never 0k
 export const tokens = (n: number) =>
-  n >= 1_000_000 ? `${num(n / 1_000_000, n % 1_000_000 === 0 ? 0 : 1)}M` : `${Math.round(n / 1000)}k`
+  n < 1000 ? String(Math.round(n)) : n < 999_500 ? `${Math.round(n / 1000)}k` : `${num(n / 1_000_000, Math.round(n / 100_000) % 10 === 0 ? 0 : 1)}M`
 
 // Colors are also set as attributes: they hold even if the app strips the <style>
 export const HEX: Record<string, string> = {
@@ -93,12 +94,42 @@ export const STYLE = `
   }
 `
 
+// Only the rules a drawing uses: each drawing carries its own style, and the
+// panel holds dozens of them. Element rules stay; a class rule stays when its
+// class is drawn; a media block keeps what is left of it
+export const pick = (css: string, body: string): string => {
+  const used = new Set([...body.matchAll(/class="([\w-]+)"/g)].map(m => m[1]!))
+  const isUsed = (selector: string) =>
+    selector.split(',').some(s => [...s.matchAll(/\.([\w-]+)/g)].every(m => used.has(m[1]!)))
+  let out = ''
+  let i = 0
+  while (i < css.length) {
+    const open = css.indexOf('{', i)
+    if (open < 0) break
+    const selector = css.slice(i, open).trim()
+    if (selector.startsWith('@')) {
+      let depth = 1
+      let j = open + 1
+      for (; j < css.length && depth > 0; j++) depth += css[j] === '{' ? 1 : css[j] === '}' ? -1 : 0
+      const inner = pick(css.slice(open + 1, j - 1), body)
+      if (inner) out += `${selector}{${inner}}`
+      i = j
+    } else {
+      const close = css.indexOf('}', open)
+      if (close < 0) break
+      if (isUsed(selector)) out += `${selector}{${css.slice(open + 1, close).trim()}}`
+      i = close + 1
+    }
+  }
+  return out
+}
+
+// A whole drawing with just its rules, colors written in for the dark theme
+export const drawing = (open: string, body: string, style = '') => inline(`${open}<style>${pick(STYLE + style, body)}</style>${body}</svg>`)
+
 // A full-width drawing at a fixed height (the fixed height keeps the scroll in place)
 export const fluid = (h: number, body: string, style = '') =>
-  inline(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${h}" overflow="visible">` +
-      `<style>${STYLE}${style}</style>${body}</svg>`,
-  )
+  drawing(`<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${h}" overflow="visible">`, body, style)
 
 // Anchored to the right edge: negative coordinates from that edge
 export const right = (body: string) => `<svg x="100%" y="0" width="1" height="1" overflow="visible">${body}</svg>`
@@ -365,16 +396,14 @@ export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) 
   // starts at the rings
   const name = t.system.toUpperCase()
   const titleW = titleWidth(name)
-  const head =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${titleW} 14" width="${titleW}" height="14">` +
-    `<style>${STYLE}</style>${title(0, 11, name)}</svg>`
+  const head = drawing(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${titleW} 14" width="${titleW}" height="14">`, title(0, 11, name))
   const TOP = 24
   const rings = {
     svg: fluid((apps.length ? H : 112) - TOP, `<g transform="translate(0 ${-TOP})">${body}</g>`),
     h: (apps.length ? H : 112) - TOP,
     alt: `${t.system}: CPU ${figure(sys.cpu)}, GPU ${figure(sys.gpu)}, RAM ${ram}${appsAlt ? `. ${appsAlt}` : ''}`,
   }
-  if (!apps.length) return { title: inline(head), titleW, rings, table: null }
+  if (!apps.length) return { title: head, titleW, rings, table: null }
 
   const cols = resources.filter(r => r.isSplit)
   const value = (label: string, v: number | undefined) =>
@@ -415,20 +444,19 @@ export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) 
     w: COL,
     h: TH,
     alt: `${r.label}: ${rows.map(row => row.cells[j]!.text).join(', ')}`,
-    svg: inline(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${COL} ${TH}" width="${COL}" height="${TH}"><style>${STYLE}</style>` +
-        rows
+    svg: drawing(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${COL} ${TH}" width="${COL}" height="${TH}">`,
+      rows
           .map((row, i) => {
             const cell = row.cells[j]!
             const look = cell.color && !row.isOther ? `font-weight="600" fill="${cell.color}"` : `class="${row.isOther ? 't3' : 't2'}"`
             return `<text ${look} x="${COL / 2}" y="${y(i)}" text-anchor="middle" font-size="11.5">${esc(cell.text)}</text>`
           })
-          .join('') +
-        `</svg>`,
+          .join(''),
     ),
   }))
   // Ranking needs two columns at least
-  return { title: inline(head), titleW, rings, table: { names, columns, isSortable: columns.length > 1 } }
+  return { title: head, titleW, rings, table: { names, columns, isSortable: columns.length > 1 } }
 }
 
 // Context card content (the title and the Compact button sit above it): the
@@ -448,10 +476,8 @@ export const contextCard = (s: Snapshot, t: Strings) => {
   // The title alone, drawn like the other cards' titles, as wide as its word
   const name = t.context.toUpperCase()
   const titleW = titleWidth(name)
-  const head =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${titleW} 14" width="${titleW}" height="14">` +
-    `<style>${STYLE}</style>${title(0, 11, name)}</svg>`
-  return { svg, h: H, title: inline(head), titleW, alt: `${t.context}: ${tokenLabel}, ${num(cp, 1)}%` }
+  const head = drawing(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${titleW} 14" width="${titleW}" height="14">`, title(0, 11, name))
+  return { svg, h: H, title: head, titleW, alt: `${t.context}: ${tokenLabel}, ${num(cp, 1)}%` }
 }
 
 // A small turning wheel: something is under way

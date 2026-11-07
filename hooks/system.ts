@@ -8,6 +8,7 @@ import type { AppLoad, AppSort, SystemStats } from '../types'
 const GIB = 2 ** 30
 
 const num = (t: string | undefined) => {
+  if (t === undefined || t.trim() === '') return undefined
   const n = Number(t)
   return Number.isFinite(n) ? n : undefined
 }
@@ -99,7 +100,7 @@ const PS = 'ps -A -o pid=,%cpu=,rss=,comm='
 // memory as Activity Monitor counts it (app + wired + compressed), the
 // processes, and each GPU client's time
 export const MAC =
-  'iostat -n0 -c 2 -w 1 | tail -1; echo @@; ' +
+  'export LC_ALL=C; iostat -n0 -c 2 -w 1 | tail -1; echo @@; ' +
   "ioreg -r -d 1 -w 0 -c IOAccelerator | grep -o '\"Device Utilization %\"=[0-9]*\\|\"model\" = \"[^\"]*\"' | head -4; echo @@; " +
   `vm_stat; echo @@; sysctl -n hw.memsize hw.logicalcpu; echo @@; ${PS}; echo @@; ` +
   "ioreg -r -c AGXDeviceUserClient -l -w 0 | grep -o '+-o AGXDeviceUserClient  <class AGXDeviceUserClient, id 0x[0-9a-f]*\\|\"accumulatedGPUTime\"=[0-9]*\\|\"IOUserClientCreator\" = \"pid [0-9]*'"
@@ -126,14 +127,15 @@ export const parseMac = (out: string): Reading => {
       cores: cores || undefined,
     },
     procs: parsePs(psPart),
-    gpuTimes: clientsPart === undefined ? undefined : parseGpuClients(clientsPart),
+    // No clients to time (an Intel Mac): the GPU's own utilization stands
+    gpuTimes: clientsPart === undefined ? undefined : ((c: Map<string, GpuClient>) => (c.size > 0 ? c : undefined))(parseGpuClients(clientsPart)),
   }
 }
 
 // Linux: two /proc/stat samples one second apart, MemAvailable, an NVIDIA GPU
 // when nvidia-smi is there, and the processes
 export const LINUX =
-  'head -1 /proc/stat; sleep 1; head -1 /proc/stat; echo @@; ' +
+  'export LC_ALL=C; head -1 /proc/stat; sleep 1; head -1 /proc/stat; echo @@; ' +
   "grep -E '^(MemTotal|MemAvailable):' /proc/meminfo; echo @@; nproc; echo @@; " +
   `nvidia-smi --query-gpu=utilization.gpu,name --format=csv,noheader,nounits 2>/dev/null | head -1; echo @@; ${PS}`
 
@@ -179,10 +181,12 @@ export const WINDOWS =
   '$n=(Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors; ' +
   '$w=[Diagnostics.Stopwatch]::StartNew(); $a=@{}; Get-Process | ForEach-Object { $a[$_.Id]=$_.CPU }; ' +
   "$s=try{(Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' -ErrorAction Stop).CounterSamples}catch{$null}; " +
+  // The counter's path is translated with Windows; the class is not
+  "if(-not $s){ $s=try{ Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction Stop | Where-Object { $_.Name -like '*engtype_3D' } | ForEach-Object { [pscustomobject]@{ InstanceName=$_.Name; CookedValue=[double]$_.UtilizationPercentage } } }catch{$null} }; " +
   "$g=if($s){($s | Measure-Object -Property CookedValue -Sum).Sum}else{''}; " +
   "$q=($s | ForEach-Object { if($_.CookedValue -gt 0 -and $_.InstanceName -match 'pid_(\\d+)_'){ \"$($matches[1])=$($_.CookedValue)\" } }) -join ';'; " +
   '$r=1000-$w.ElapsedMilliseconds; if($r -gt 0){ Start-Sleep -Milliseconds $r }; $d=$w.Elapsed.TotalSeconds; ' +
-  "$p=(Get-Process | Where-Object Id -ne 0 | ForEach-Object { \"$($_.Id),$($_.ProcessName),$($_.CPU - $a[$_.Id]),$($_.WorkingSet64)\" }) -join ';'; " +
+  "$p=(Get-Process | Where-Object { $_.Id -ne 0 -and $_.Id -ne $PID } | ForEach-Object { \"$($_.Id),$($_.ProcessName),$($_.CPU - $a[$_.Id]),$($_.WorkingSet64)\" }) -join ';'; " +
   "$v=(Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name }) -join ';'; " +
   '"$c|$($o.TotalVisibleMemorySize)|$($o.FreePhysicalMemory)|$n|$g|$d|$p|$q|$v"'
 

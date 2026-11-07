@@ -79,6 +79,7 @@ declare module 'claude-code' {
       agentRuns: AgentRun[]
       // the agents as the card last drew them: details catch up every 5 seconds
       agentView: AgentRun[] | null
+      owner: string
       tick: number
       history: Day[]
       update: UpdateState
