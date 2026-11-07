@@ -821,9 +821,11 @@ test('the System card comes first, with each app\'s share of the machine', async
   // Each app's figure in the color of its share, Other in grey
   const cpu = String((await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('CPU:'))?.props.source)
   expect(cpu.includes(encodeURIComponent(`fill="${heat(7)}"`)) || cpu.includes(`fill="${heat(7)}"`)).toBe(true)
-  // The figures' columns never shrink, so each row stays level with its app
+  // The figures' columns never shrink, so each row stays level with its app;
+  // no width of theirs in cells, which would push the table out of the panel
   const boxes = await ui.findAll({ type: 'Box' })
-  expect(boxes.filter(x => x.props.flexShrink === 0 && x.props.minWidth === 52).length).toBe(3)
+  expect(boxes.filter(x => x.props.flexShrink === 0).length).toBe(3)
+  expect(boxes.some(x => typeof x.props.minWidth === 'number' && x.props.minWidth > 0)).toBe(false)
   await ui.unmount()
 })
 

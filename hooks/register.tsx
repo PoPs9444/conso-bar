@@ -15,7 +15,7 @@ import type { GpuClient, Platform, Proc, Reading } from './system'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.29.0'
+export const VERSION = '0.29.1'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
@@ -713,7 +713,7 @@ export const register: Register = on => {
                   {sys.table.columns.map(c => (
                     // Never squeezed: a narrower column would shrink its figures
                     // and lose the line of their app; the names give way instead
-                    <els.Box key={`col-${c.key}`} flexDirection="column" alignItems="center" flexShrink={0} minWidth={c.w}>
+                    <els.Box key={`col-${c.key}`} flexDirection="column" alignItems="center" flexShrink={0}>
                       {sys.table?.isSortable ? (
                         button(`sort-${c.key}`, sorting === c.key ? `${c.label} ▾` : c.label, () => sortApps($, c.key), {
                           dimColor: sorting !== c.key,

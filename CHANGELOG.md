@@ -2,6 +2,11 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.29.1] - 2026-11-07
+
+### Fixed
+- **The System table shows every column again.** Version 0.29.0 gave the figures' columns a minimum width counted in characters rather than pixels, which pushed the app names, GPU and RAM out of the panel. The columns now simply never shrink.
+
 ## [0.29.0] - 2026-11-07
 
 ### Added
