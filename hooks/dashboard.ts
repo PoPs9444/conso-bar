@@ -379,14 +379,19 @@ export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) 
   const cols = resources.filter(r => r.isSplit)
   const value = (label: string, v: number | undefined) =>
     v === undefined ? '—' : label === 'RAM' ? `${gb(v)} ${t.gb}` : `${Math.round(v)}%`
-  const appValue = (r: (typeof cols)[number], a: AppLoad) => value(r.label, r.label === 'RAM' ? a.ram : r.share(a))
-  const otherValue = (r: (typeof cols)[number]) => {
-    if (r.label === 'RAM') return value('RAM', sys.ramUsed === undefined ? undefined : Math.max(0, sys.ramUsed - sum(apps.map(a => a.ram))))
-    return value(r.label, r.p === undefined ? undefined : Math.max(0, r.p - sum(apps.map(a => r.share(a)))))
+  // An app's figure in the color of its share of the machine, as the rings
+  // are: green when light, red as it nears the whole
+  const appCell = (r: (typeof cols)[number], a: AppLoad) => {
+    const share = r.share(a)
+    return { text: value(r.label, r.label === 'RAM' ? a.ram : share), color: share === undefined ? undefined : heat(share) }
   }
-  const rows = [
-    ...apps.map((a, i) => ({ name: a.name, color: appColor(a, i), isOther: false, cells: cols.map(r => appValue(r, a)) })),
-    { name: t.other, color: OTHER_COLOR, isOther: true, cells: cols.map(otherValue) },
+  const otherCell = (r: (typeof cols)[number]) => {
+    if (r.label === 'RAM') return { text: value('RAM', sys.ramUsed === undefined ? undefined : Math.max(0, sys.ramUsed - sum(apps.map(a => a.ram)))) }
+    return { text: value(r.label, r.p === undefined ? undefined : Math.max(0, r.p - sum(apps.map(a => r.share(a))))) }
+  }
+  const rows: { name: string; color: string; isOther: boolean; cells: { text: string; color?: string }[] }[] = [
+    ...apps.map((a, i) => ({ name: a.name, color: appColor(a, i), isOther: false, cells: cols.map(r => appCell(r, a)) })),
+    { name: t.other, color: OTHER_COLOR, isOther: true, cells: cols.map(otherCell) },
   ]
   // Every column the same height, one row each 18 px, so they line up
   const ROW = 18
@@ -409,11 +414,15 @@ export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) 
     label: r.label,
     w: COL,
     h: TH,
-    alt: `${r.label}: ${rows.map(row => row.cells[j]).join(', ')}`,
+    alt: `${r.label}: ${rows.map(row => row.cells[j]!.text).join(', ')}`,
     svg: inline(
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${COL} ${TH}" width="${COL}" height="${TH}"><style>${STYLE}</style>` +
         rows
-          .map((row, i) => `<text class="${row.isOther ? 't3' : 't2'}" x="${COL / 2}" y="${y(i)}" text-anchor="middle" font-size="11.5">${esc(row.cells[j]!)}</text>`)
+          .map((row, i) => {
+            const cell = row.cells[j]!
+            const look = cell.color && !row.isOther ? `font-weight="600" fill="${cell.color}"` : `class="${row.isOther ? 't3' : 't2'}"`
+            return `<text ${look} x="${COL / 2}" y="${y(i)}" text-anchor="middle" font-size="11.5">${esc(cell.text)}</text>`
+          })
           .join('') +
         `</svg>`,
     ),

@@ -2,6 +2,14 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.29.0] - 2026-11-07
+
+### Added
+- **The System table's figures in color.** Each app's CPU, GPU and memory is colored by its share of the machine, as the rings are: green when light, then yellow, orange and red as it nears the whole.
+
+### Fixed
+- **Each row of figures is level with its app again.** In a narrow panel, the CPU and GPU columns were squeezed and their figures drawn smaller, so they no longer faced the right app. The columns now keep their width, and the app names give way instead.
+
 ## [0.28.3] - 2026-11-02
 
 ### Fixed
