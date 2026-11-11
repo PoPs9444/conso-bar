@@ -3,7 +3,7 @@ import type { ButtonProps, EngineInterface, Register, RenderChildren, RenderElem
 
 import type { AgentRun, AppSort, CardKey, Day, Lang, Limit, Snapshot, SystemStats, UpdateState } from '../types'
 
-import { agentsCard, nextLayout } from './agents'
+import { MAX_ROWS, MORE_ROWS, agentsCard, nextLayout } from './agents'
 
 import { HEX, contextCard, footerLine, heat, historyCard, left, limitCards, systemCard, tokens, updateCard } from './dashboard'
 import { STRINGS, toLang } from './i18n'
@@ -15,7 +15,7 @@ import type { GpuClient, Platform, Proc, Reading } from './system'
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.30.0'
+export const VERSION = '0.31.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
@@ -28,6 +28,8 @@ const agents = atom({ plugin: 'conso-bar', key: 'agentRuns' } as const, [])
 // The agents as the card last drew them; null until the first change, the
 // card then draws the agents themselves
 const agentView = atom({ plugin: 'conso-bar', key: 'agentView' } as const, null as AgentRun[] | null)
+// How many agent rows the card shows: a panel's worth until Show more
+const agentRows = atom({ plugin: 'conso-bar', key: 'agentRows' } as const, MAX_ROWS)
 const tick = atom({ plugin: 'conso-bar', key: 'tick' } as const, 0)
 const history = atom({ plugin: 'conso-bar', key: 'history' } as const, [])
 const DEFAULT_ORDER: CardKey[] = ['system', 'limits', 'context', 'history', 'agents']
@@ -247,6 +249,78 @@ const syncFromStore = async ($: EngineInterface) => {
   const days = ((await $.store.get('costDays')) ?? {}) as Record<string, number>
   await setHistory($, lastWeek(days, now))
 }
+
+// The plan's windows straight from Anthropic, the same request /usage makes:
+// they move with every device and claude.ai, not only with this session's
+// replies. One session asks for all of them, every 5 minutes at most, and
+// waits longer after a refusal; the others read its answer from the store
+const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
+const USAGE_EVERY = 5 * 60_000
+const USAGE_MAX_WAIT = 60 * 60_000
+type UsageAsk = { next: number; wait: number; status?: number }
+
+export const parseUsage = (text: string): Limit[] => {
+  let data: unknown
+  try {
+    data = JSON.parse(text)
+  } catch {
+    return []
+  }
+  if (!data || typeof data !== 'object') return []
+  return (['five_hour', 'seven_day'] as const).flatMap(kind => {
+    const w = (data as Record<string, unknown>)[kind]
+    if (!w || typeof w !== 'object') return []
+    const { utilization: u, resets_at: r } = w as { utilization?: unknown; resets_at?: unknown }
+    if (typeof u !== 'number' || !Number.isFinite(u)) return []
+    // Microseconds (.583615) cut to milliseconds, which every engine reads
+    const at = typeof r === 'string' ? Date.parse(r.replace(/(\.\d{3})\d+/, '$1')) : NaN
+    const limit: Limit = { kind, percentUsed: Math.min(100, Math.max(0, Math.round(u * 10) / 10)) }
+    return [Number.isFinite(at) ? { ...limit, resetsAt: new Date(at).toISOString() } : limit]
+  })
+}
+
+// The engine's own reading of the windows (its last reply's headers), as last
+// seen: one that has not moved is no newer than a reading from Anthropic
+let engineLimits = ''
+
+const refreshUsage = async ($: EngineInterface) => {
+  const now = await $.clock.now()
+  const ask = (await $.store.get('usageAsk').catch(() => undefined)) as UsageAsk | undefined
+  // A time far ahead is a clock that moved back: ask again
+  if (ask && ask.next > now && ask.next - now <= USAGE_MAX_WAIT) return
+  const wait = ask && Number.isFinite(ask.wait) ? ask.wait : USAGE_EVERY
+  // Taken before the request: another session that looks now waits its turn
+  await $.store.set('usageAsk', { next: now + wait, wait })
+  const auth = await $.session.authorize().catch(() => null)
+  if (!auth || auth.kind !== 'bearer') {
+    // No subscription sign-in (an API key, a gateway): nothing to ask for
+    await $.store.set('usageAsk', { next: now + USAGE_MAX_WAIT, wait: USAGE_EVERY })
+    return
+  }
+  const res = await $.http
+    .fetch(USAGE_URL, { auth: auth.handle, headers: { 'Content-Type': 'application/json', 'anthropic-beta': 'oauth-2025-04-20' } })
+    .catch(() => undefined)
+  const limits = res?.ok ? parseUsage(res.text) : []
+  if (limits.length === 0) {
+    const longer = Math.min(USAGE_MAX_WAIT, wait * 2)
+    await $.store.set('usageAsk', { next: now + longer, wait: longer, status: res?.status })
+    return
+  }
+  await $.store.set('usageAsk', { next: now + USAGE_EVERY, wait: USAGE_EVERY, status: res?.status })
+  await $.store.set('lastLimits', { limits, at: now })
+  const s = await read($, snapshot)
+  if (s) {
+    // A window Anthropic left out keeps its last reading
+    const kept = s.limits.filter(l => !limits.some(n => n.kind === l.kind))
+    await save($, { ...s, limits: fresh([...limits, ...kept], now), limitsAt: now })
+  }
+}
+
+// The limits are worth asking for while someone can see them: the panel, or
+// the terminal's band drawn in the last few minutes
+let bandDrawnAt = 0
+const isLimitsShown = async ($: EngineInterface) =>
+  (await $.clock.now()) - bandDrawnAt < 10 * 60_000 || (await isPaneOpen($))
 
 let poller: { cancel: () => void } | undefined
 let updatePoller: { cancel: () => void } | undefined
@@ -561,6 +635,7 @@ export const register: Register = on => {
     const now = await $.clock.now()
     let first = toSnapshot(await $.session.usage())
     if (first.limits.length > 0) {
+      engineLimits = JSON.stringify(first.limits)
       first = { ...first, limitsAt: now }
     } else {
       // No reply yet in this session: show the last known reading
@@ -579,7 +654,16 @@ export const register: Register = on => {
     )
     await update($, owner, () => INSTANCE)
     poller?.cancel()
-    poller = $.clock.every(60_000, beat($, () => syncFromStore($).catch(() => undefined)))
+    poller = $.clock.every(
+      60_000,
+      beat($, async () => {
+        await syncFromStore($).catch(() => undefined)
+        if (await isLimitsShown($)) await refreshUsage($).catch(() => undefined)
+      }),
+    )
+    // A first reading from Anthropic soon after start, on a timer like the
+    // update check below
+    $.clock.after(2000, () => void (async () => ((await read($, owner)) === INSTANCE && (await isLimitsShown($)) ? refreshUsage($) : undefined))().catch(() => undefined))
     // A new version on GitHub? A few seconds after start, then every 6 hours.
     // On a timer, not inside this hook: work left running after the hook
     // returns is cut off, and the check would never land
@@ -624,6 +708,7 @@ export const register: Register = on => {
     await $.ui.open({ id: PANE, title: 'Conso' })
     // Opened again after a close: a fresh reading at once, not at the next beat
     $.clock.after(0, () => void pollSystem($).catch(() => undefined))
+    $.clock.after(0, () => void refreshUsage($).catch(() => undefined))
     return { text: (await words($)).opened }
   })
 
@@ -671,7 +756,8 @@ export const register: Register = on => {
       const sys = stats ? safely(() => systemCard(stats, t, sorting), null) : null
       const busy = await read($, isCompacting)
       const runs = (await read($, agentView)) ?? (await read($, agents))
-      const ag = safely(() => agentsCard(runs, now, t), agentsCard([], now, t))
+      const rowLimit = await read($, agentRows)
+      const ag = safely(() => agentsCard(runs, now, t, rowLimit), agentsCard([], now, t))
 
       // Every button of the panel: plain, dim at rest unless told otherwise
       const site = `${e.surface}\u0000`
@@ -702,8 +788,14 @@ export const register: Register = on => {
         })
       }
 
-      // Clear frees the room taken by finished agents
-      const clearFinished = () => setAgents($, list => list.filter(a => a.status === 'running'))
+      // Clear frees the room taken by finished agents, and folds the list back
+      const clearFinished = async () => {
+        await setAgents($, list => list.filter(a => a.status === 'running'))
+        await update($, agentRows, () => MAX_ROWS)
+      }
+      // Show more adds rows a batch at a time, Show less goes back to a panel's worth
+      const showMore = () => update($, agentRows, n => Math.max(MAX_ROWS, Number.isFinite(n) ? n : MAX_ROWS) + MORE_ROWS)
+      const showLess = () => update($, agentRows, () => MAX_ROWS)
 
       // Clean stop: no more tools or requests for this agent, it hands back at its
       // next step (a tool already running finishes)
@@ -785,7 +877,15 @@ export const register: Register = on => {
               <els.Svg source={r.bottom.svg} alt={r.bottom.alt} height={r.bottom.h} />
             </els.Box>
           )),
-          ag.more ? <els.Svg key="more" source={ag.more.svg} alt={ag.more.alt} height={ag.more.h} /> : null,
+          ag.more || ag.canLess ? (
+            <els.Box key="more" flexDirection="row" alignItems="center" gap={2}>
+              <els.Box flexGrow={1} flexShrink={1} minWidth={0}>
+                {ag.more ? <els.Svg source={ag.more.svg} alt={ag.more.alt} height={ag.more.h} /> : null}
+              </els.Box>
+              {ag.more ? button('agents-more', t.showMore, showMore) : null}
+              {ag.canLess ? button('agents-less', t.showLess, showLess) : null}
+            </els.Box>
+          ) : null,
         ]),
       }
 
@@ -1034,10 +1134,15 @@ export const register: Register = on => {
     const now = await $.clock.now()
     const prev = await read($, snapshot)
     const measured = toSnapshot(e)
+    // Only a reading that moved is new: the context or the cost changing
+    // brings the same windows again, older than one read from Anthropic since
+    const key = JSON.stringify(measured.limits)
+    const isNewReading = measured.limits.length > 0 && key !== engineLimits
+    if (measured.limits.length > 0) engineLimits = key
     const s =
-      measured.limits.length > 0
-        ? { ...measured, limitsAt: now }
-        : { ...measured, limits: prev?.limits ?? [], limitsAt: prev?.limitsAt }
+      isNewReading || !prev
+        ? { ...measured, limitsAt: measured.limits.length > 0 ? now : undefined }
+        : { ...measured, limits: prev.limits, limitsAt: prev.limitsAt }
     await save($, s)
     await remember($, s).catch(() => undefined)
     return next(e)
@@ -1051,6 +1156,7 @@ export const register: Register = on => {
 
     const t = await words($)
     const now = await $.clock.now()
+    bandDrawnAt = now
     const { Box, Text } = $.ui.resolve(e)
 
     // One segment per figure, separated by a space

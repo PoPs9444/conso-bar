@@ -98,7 +98,7 @@ Restart Claude Code. The **Conso** panel opens on the right at the start of ever
 | **Limits** | Your 5-hour and weekly usage in one card: a green-to-red ring for each, the time until it resets, a forecast, and the session cost. |
 | **Context** | Percentage and tokens used out of the window, a green-to-red gradient bar, and the **Compact** button. |
 | **History** | Today's cost, the last 7 days' total, and a small bar per day, from green for a light day to red for the heaviest. |
-| **Agents** | The session's agents, live: running ones first, then the latest finished, ten at most, the rest counted on one line. |
+| **Agents** | The session's agents, live: running ones first, then the latest finished. Past ten, **Show more** adds twenty at a time and **Show less** folds the list back. |
 
 Color is kept for the numbers that matter: percentages turn from green to red as they approach 100%, each model family has its own color (Fable red, Opus violet, Sonnet blue, Haiku teal), and each app in the System card keeps its color while it stays among the top four.
 
@@ -149,14 +149,17 @@ claude plugin update conso-bar@conso-bar
 
 ## How the numbers are computed
 
-- **Limits** come from Claude Code, which receives them with every model reply, rounded to whole percentages. A new conversation shows the last known reading right away, and every session reads it again each minute.
+- **Limits** come from Anthropic, in whole percentages: with every model reply, and every 5 minutes while the panel or the terminal bar is on screen, through the same request as `/usage`. So they follow what you use on other devices and on claude.ai without a message. One conversation asks for all of them, and the others pick its reading up within a minute.
 - **Forecast** uses your average pace since the window started, nights and breaks included, so a burst of activity does not make it run away. It appears after 30 minutes for the 5-hour limit and after 24 hours for the weekly one.
 - **Session cost and history** use the total Claude Code computes at public API prices, the same figure as `/cost`. On a subscription this is not what you pay: it is what the same usage would cost pay-as-you-go.
 - **Agent cost** is an estimate from each agent's tokens and the models' public prices, listed in [`hooks/pricing.ts`](hooks/pricing.ts).
 
 ## Privacy
 
-Conso sends nothing anywhere: everything is computed and stored on your machine. Its only network request reads the version number published in this repository, to offer updates.
+Everything Conso computes and stores stays on your machine. It makes two network requests, both read-only, and neither carries anything about your work:
+
+- the version number published in this repository, to offer updates;
+- your plan's usage, from Anthropic (`api.anthropic.com/api/oauth/usage`, the request behind `/usage`), every 5 minutes at most while the panel or the bar is on screen. Claude Code signs it itself: Conso never sees your credentials. With an API key or a gateway, it is never sent.
 
 For the **System** card, it runs one short command every 5 seconds in the desktop app, using only what the system ships with: `iostat`, `ioreg`, `vm_stat`, `sysctl` and `ps` on macOS, `/proc` and `ps` (and `nvidia-smi` when present) on Linux, PowerShell every 10 seconds on Windows. The names of the apps it lists never leave the panel.
 
@@ -167,13 +170,13 @@ To pick its language, it reads Claude Code's `language` setting and, in the desk
 <details>
 <summary><b>Why do the limits have no decimals?</b></summary>
 <br>
-Claude Code reports them rounded to whole percentages. Showing a decimal would mean making it up.
+Anthropic reports them in whole percentages. Showing a decimal would mean making it up.
 </details>
 
 <details>
-<summary><b>The percentage does not move when I am not typing.</b></summary>
+<summary><b>Does the percentage move when I am not typing?</b></summary>
 <br>
-Limits are only known when the model replies. Without a message, no session receives a new reading.
+It moves on its own: while the panel or the bar is on screen, Conso reads your usage from Anthropic every 5 minutes. A new figure can take up to 5 minutes to show, and it moves one whole point at a time.
 </details>
 
 <details>

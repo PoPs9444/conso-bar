@@ -2,6 +2,15 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.31.0] - 2026-11-11
+
+### Added
+- **Limits that update by themselves.** While the panel or the terminal bar is on screen, Conso reads your plan's usage from Anthropic every 5 minutes, the same reading as `/usage`. The 5-hour and weekly limits now follow what you use on other devices and on claude.ai, without sending a message. One conversation asks for all of them, and it waits longer if the request is refused. Claude Code signs the request itself, so Conso never sees your credentials.
+- **Show more and Show less on the Agents card.** Past ten agents, Show more brings the next twenty and Show less folds the list back. Clear folds it back too.
+
+### Fixed
+- **A limit no longer steps back.** When only the context or the cost changed, the last reply's limits were taken as a new reading and could replace a fresher one from another conversation.
+
 ## [0.30.0] - 2026-11-07
 
 ### Improved

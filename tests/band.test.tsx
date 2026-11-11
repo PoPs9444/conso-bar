@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { VERSION } from '../hooks/register'
+import { VERSION, parseUsage } from '../hooks/register'
 import { heat, tokens } from '../hooks/dashboard'
 import { appOf, gpuShort, keepColors, parseGpuClients, parseLinux, parseMac, parseWindows, pickGpu, topApps } from '../hooks/system'
 
@@ -347,6 +347,96 @@ test('at most 10 agent rows, running first, the rest counted on one line', async
   expect(rows[1]!.startsWith('Task 13:')).toBe(true)
   expect(alts).toContain('and 4 more')
   await ui.unmount()
+})
+
+test('Show more brings the hidden agents, Show less folds them back', async ($, on) => {
+  const runs = Array.from({ length: 14 }, (_, i) => ({
+    id: `a${i}`, isLinked: true, usd: 0, description: `Task ${i}`, type: 'Explore', model: 'claude-opus-5-5',
+    status: i === 0 ? 'running' : 'done', startedAt: 0, endedAt: 1000, steps: 1, outputTokens: 0,
+  }))
+  on('state.get', (_: unknown, e: { key: string }, next: (e: unknown) => unknown) =>
+    e.key === 'agentRuns' ? { value: { value: runs, version: 1 } } : next(e),
+  )
+  await setup($, on)
+  const ui = await $.ui.mount(PANE)
+  const rows = async () => (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt)).filter(a => a.startsWith('Task '))
+  expect((await rows()).length).toBe(10)
+  expect((await ui.find({ key: 'agents-more' }))?.props.label).toBe('Show more')
+  expect(await ui.find({ key: 'agents-less' })).toBe(undefined)
+  await ui.press({ key: 'agents-more' })
+  expect((await rows()).length).toBe(14)
+  expect(await ui.find({ key: 'agents-more' })).toBe(undefined)
+  expect((await ui.find({ key: 'agents-less' }))?.props.label).toBe('Show less')
+  await ui.press({ key: 'agents-less' })
+  expect((await rows()).length).toBe(10)
+  expect(await ui.find({ key: 'agents-less' })).toBe(undefined)
+  await ui.unmount()
+})
+
+test('the plan usage from Anthropic reads to the limits', () => {
+  expect(
+    parseUsage(
+      JSON.stringify({
+        five_hour: { utilization: 12.34, resets_at: '2026-11-01T05:00:00.583615+00:00' },
+        seven_day: { utilization: 37, resets_at: null },
+        seven_day_opus: null,
+      }),
+    ),
+  ).toEqual([
+    { kind: 'five_hour', percentUsed: 12.3, resetsAt: '2026-11-01T05:00:00.583Z' },
+    { kind: 'seven_day', percentUsed: 37 },
+  ])
+  expect(parseUsage('<html>')).toEqual([])
+  expect(parseUsage(JSON.stringify({ five_hour: null, seven_day: { utilization: null } }))).toEqual([])
+})
+
+test('the limits move without a message: one request every 5 minutes, never undone by an older reading', async ($, on) => {
+  let asks = 0
+  let weekly = 62
+  on('session.authorize', () => ({ value: { handle: 'h', kind: 'bearer' } }))
+  on('session.measure', (_: unknown, e: { changed: string[] }) => ({ changed: e.changed }))
+  on('http.fetch', (_: unknown, e: { url: string; init?: { auth?: string } }) => {
+    if (!e.url.endsWith('/api/oauth/usage')) return { value: { ok: false, status: 404, headers: {}, text: '' } }
+    expect(e.init?.auth).toBe('h')
+    asks++
+    const body = { five_hour: { utilization: 44, resets_at: '2026-11-01T03:00:00Z' }, seven_day: { utilization: weekly, resets_at: '2026-11-05T00:00:00Z' } }
+    return { value: { ok: true, status: 200, headers: {}, text: JSON.stringify(body) } }
+  })
+  await setup($, on)
+  await clock.advance(2000)
+  expect(asks).toBe(1)
+  const weeklyAlt = async () => {
+    const ui = await $.ui.mount(PANE)
+    const alt = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt)).find(a => a.includes('Weekly limit: '))
+    await ui.unmount()
+    return alt?.match(/Weekly limit: (\d+)%/)?.[1]
+  }
+  expect(await weeklyAlt()).toBe('62')
+  // The context moving brings the engine's older windows again: they stay out
+  await ($ as any).session.measure({ ...USAGE, context: { ...USAGE.context, tokens: 120_000 }, changed: ['context'] })
+  expect(await weeklyAlt()).toBe('62')
+  // Not again before 5 minutes, then the new figure
+  weekly = 64
+  await clock.advance(4 * 60_000)
+  expect(asks).toBe(1)
+  await clock.advance(2 * 60_000)
+  expect(asks).toBe(2)
+  expect(await weeklyAlt()).toBe('64')
+  // A reply's own headers that moved are the newest reading
+  await ($ as any).session.measure({ ...USAGE, rateLimits: [{ kind: 'seven_day', percentUsed: 65, resetsAt: '2026-11-05T00:00:00Z' }], changed: ['rateLimits'] })
+  expect(await weeklyAlt()).toBe('65')
+})
+
+test('no request for the plan usage without a subscription sign-in', async ($, on) => {
+  let asks = 0
+  on('session.authorize', () => ({ value: { handle: 'k', kind: 'api-key' } }))
+  on('http.fetch', (_: unknown, e: { url: string }) => {
+    if (e.url.endsWith('/api/oauth/usage')) asks++
+    return { value: { ok: false, status: 404, headers: {}, text: '' } }
+  })
+  await setup($, on)
+  await clock.advance(10 * 60_000)
+  expect(asks).toBe(0)
 })
 
 test('no reading of the machine while the panel is closed, one at once when it opens', async ($, on) => {

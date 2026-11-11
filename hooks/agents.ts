@@ -89,6 +89,8 @@ const clip = (t: string, max: number) => (t.length > max ? `${t.slice(0, max - 1
 
 // Rows drawn at most; the rest are counted on one line
 export const MAX_ROWS = 10
+// What one press of Show more adds
+export const MORE_ROWS = 20
 
 const AGENT_STYLE = `
   .violet { color: #a78bfa; } .slate { color: #9aa4b2; } .teal { color: #2dd4bf; }
@@ -238,14 +240,16 @@ const sound = (a: AgentRun, now: number): AgentRun => ({
 
 // The card itself is a Box (to hold Clear and the Stop buttons): here the title
 // with the counter, and one drawing per agent, from the most active to the oldest
-export const agentsCard = (list: readonly AgentRun[], now: number, t: Strings) => {
+export const agentsCard = (list: readonly AgentRun[], now: number, t: Strings, limit = MAX_ROWS) => {
   const agents = list.map(a => sound(a, now))
   const running = agents.filter(a => a.status === 'running')
   const finished = agents.filter(a => a.status !== 'running')
-  // The running ones first, then the latest finished, up to a panel's worth:
-  // every row is a few drawings, and a long session would make each redraw heavy
+  // The running ones first, then the latest finished, up to a panel's worth
+  // unless Show more was pressed: every row is a few drawings, and a long
+  // session would make each redraw heavy
   const ordered = [...running, ...[...finished].reverse()]
-  const shown = ordered.slice(0, MAX_ROWS)
+  const cap = Number.isFinite(limit) ? Math.max(MAX_ROWS, Math.floor(limit)) : MAX_ROWS
+  const shown = ordered.slice(0, cap)
   const hiddenCount = ordered.length - shown.length
 
   // The counter right after the title, whatever the title's length
@@ -283,5 +287,8 @@ export const agentsCard = (list: readonly AgentRun[], now: number, t: Strings) =
     ? { svg: fluid(16, `<text class="t3" x="24" y="12" font-size="11.5">${esc(t.moreAgents(hiddenCount))}</text>`), h: 16, alt: t.moreAgents(hiddenCount) }
     : null
 
-  return { head, headW, rows, more, empty, emptyH: 18, finished: finished.length }
+  // Show less once more than a panel's worth is on show
+  const canLess = cap > MAX_ROWS && shown.length > MAX_ROWS
+
+  return { head, headW, rows, more, canLess, empty, emptyH: 18, finished: finished.length }
 }
