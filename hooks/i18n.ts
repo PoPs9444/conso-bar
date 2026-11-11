@@ -26,6 +26,8 @@ export type Strings = {
   finished: (n: number) => string
   noAgents: string
   moreAgents: (n: number) => string
+  showMore: string
+  showLess: string
   system: string
   cores: (n: number) => string
   // a figure the machine does not give
@@ -96,6 +98,8 @@ const en: Strings = {
   finished: n => `${n} done`,
   noAgents: 'No agents in this session yet',
   moreAgents: n => `and ${n} more`,
+  showMore: 'Show more',
+  showLess: 'Show less',
   system: 'System',
   cores: n => `${n} cores`,
   na: 'n/a',
@@ -160,6 +164,8 @@ const fr: Strings = {
   finished: n => `${n} terminé${n > 1 ? 's' : ''}`,
   noAgents: 'Aucun agent dans cette session',
   moreAgents: n => `et ${n} autre${n > 1 ? 's' : ''}`,
+  showMore: 'Afficher plus',
+  showLess: 'Réduire',
   system: 'Système',
   cores: n => `${n} cœurs`,
   na: 'indispo.',
@@ -224,6 +230,8 @@ const es: Strings = {
   finished: n => `${n} terminado${n > 1 ? 's' : ''}`,
   noAgents: 'Aún no hay agentes en esta sesión',
   moreAgents: n => `y ${n} más`,
+  showMore: 'Mostrar más',
+  showLess: 'Mostrar menos',
   system: 'Sistema',
   cores: n => `${n} núcleos`,
   na: 'n/d',
@@ -288,6 +296,8 @@ const de: Strings = {
   finished: n => `${n} fertig`,
   noAgents: 'Noch keine Agenten in dieser Sitzung',
   moreAgents: n => `und ${n} weitere`,
+  showMore: 'Mehr anzeigen',
+  showLess: 'Weniger anzeigen',
   system: 'System',
   cores: n => `${n} Kerne`,
   na: 'k. A.',
@@ -352,6 +362,8 @@ const it: Strings = {
   finished: n => (n > 1 ? `${n} completati` : `${n} completato`),
   noAgents: 'Ancora nessun agente in questa sessione',
   moreAgents: n => `e altri ${n}`,
+  showMore: 'Mostra altri',
+  showLess: 'Mostra meno',
   system: 'Sistema',
   cores: n => `${n} core`,
   na: 'n/d',
@@ -416,6 +428,8 @@ const pt: Strings = {
   finished: n => `${n} concluído${n > 1 ? 's' : ''}`,
   noAgents: 'Ainda não há agentes nesta sessão',
   moreAgents: n => `e mais ${n}`,
+  showMore: 'Mostrar mais',
+  showLess: 'Mostrar menos',
   system: 'Sistema',
   cores: n => `${n} núcleos`,
   na: 'n/d',
