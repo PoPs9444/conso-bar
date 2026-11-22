@@ -333,6 +333,58 @@ const quarters = (cx: number, cy: number, r: number, parts: { p: number; color: 
 // the apps that use the most, then those apps in a table with their colors,
 // ranked by the column picked (its header marked) or by all three. The title
 // sits above, beside the buttons that pick the column
+// A temperature's color: green while the chip runs cool, yellow around 70 °C,
+// red from 100 °C, where processors start to slow themselves down
+export const tempColor = (c: number) => heat(((c - 40) / 60) * 100)
+
+// Width of a short line in the panel's font, from each character's advance
+// (in em, SF Pro at semibold), so it can end flush with the card's edge
+const ADVANCE: Record<string, number> = { ' ': 0.26, '\u00a0': 0.26, '\u202f': 0.18, '°': 0.4, '·': 0.28, C: 0.72, G: 0.74, P: 0.64, U: 0.72, i: 0.26, I: 0.28, l: 0.26, t: 0.36, f: 0.34, r: 0.4, m: 0.9 }
+const textWidth = (text: string, size: number) =>
+  [...text].reduce((w, ch) => w + (/\d/.test(ch) ? 0.62 : (ADVANCE[ch] ?? (ch === ch.toUpperCase() ? 0.68 : 0.57))), 0) * size
+
+// The temperatures on the System card's title line: a small thermometer
+// filled to the hottest sensor, then each sensor's name and degrees
+export const temperatures = (sys: SystemStats, t: Strings) => {
+  const temps = [
+    { label: t.chip, c: sys.chipTemp },
+    { label: 'CPU', c: sys.cpuTemp },
+    { label: 'GPU', c: sys.gpuTemp },
+  ].flatMap(x => (x.c === undefined ? [] : [{ label: x.label, c: Math.round(x.c) }]))
+  if (!temps.length) return null
+  const hottest = Math.max(...temps.map(x => x.c))
+  const SIZE = 11.5
+  const degrees = (c: number) => `${c}\u202f°C`
+  // No-break spaces: an SVG text folds runs of plain ones into one
+  const SEP = '\u00a0\u00a0·\u00a0\u00a0'
+  const words = temps.map(x => `${x.label}\u00a0${degrees(x.c)}`).join(SEP)
+  const textW = Math.ceil(textWidth(words, SIZE))
+  const ICON = 8
+  const GAP = 5
+  const w = ICON + GAP + textW + 1
+  // The bulb and its tube, then the mercury up to how hot it runs
+  const level = Math.min(1, Math.max(0.15, (hottest - 30) / 75))
+  const top = 9.5 - level * 7.5
+  const color = tempColor(hottest)
+  const icon =
+    `<rect class="t3" fill-opacity=".45" x="2" y="0.5" width="4" height="9.5" rx="2"/>` +
+    `<circle class="t3" fill-opacity=".45" cx="4" cy="10.5" r="3.2"/>` +
+    `<rect x="3.1" y="${top.toFixed(1)}" width="1.8" height="${(10.5 - top).toFixed(1)}" rx=".9" fill="${color}"/>` +
+    `<circle cx="4" cy="10.5" r="2.1" fill="${color}"/>`
+  const line = temps
+    .map(
+      (x, i) =>
+        (i > 0 ? `<tspan class="t3">${SEP}</tspan>` : '') +
+        `<tspan class="t3">${esc(x.label)}\u00a0</tspan><tspan font-weight="700" fill="${tempColor(x.c)}">${esc(degrees(x.c))}</tspan>`,
+    )
+    .join('')
+  const svg = drawing(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} 14" width="${w}" height="14">`,
+    icon + `<text x="${w}" y="11" text-anchor="end" font-size="${SIZE}" font-variant-numeric="tabular-nums">${line}</text>`,
+  )
+  return { svg, w, alt: `${t.temperature}: ${temps.map(x => `${x.label} ${x.c} °C`).join(', ')}` }
+}
+
 export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) => {
   // 50.8, 64, 128: a tenth only where there is one
   const gb = (n: number) => (n >= 100 ? String(Math.round(n)) : String(Math.round(n * 10) / 10))
@@ -403,7 +455,8 @@ export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) 
     h: (apps.length ? H : 112) - TOP,
     alt: `${t.system}: CPU ${figure(sys.cpu)}, GPU ${figure(sys.gpu)}, RAM ${ram}${appsAlt ? `. ${appsAlt}` : ''}`,
   }
-  if (!apps.length) return { title: head, titleW, rings, table: null }
+  const temp = temperatures(sys, t)
+  if (!apps.length) return { title: head, titleW, temp, rings, table: null }
 
   const cols = resources.filter(r => r.isSplit)
   const value = (label: string, v: number | undefined) =>
@@ -456,7 +509,7 @@ export const systemCard = (sys: SystemStats, t: Strings, sort?: AppSort | null) 
     ),
   }))
   // Ranking needs two columns at least
-  return { title: head, titleW, rings, table: { names, columns, isSortable: columns.length > 1 } }
+  return { title: head, titleW, temp, rings, table: { names, columns, isSortable: columns.length > 1 } }
 }
 
 // Context card content (the title and the Compact button sit above it): the

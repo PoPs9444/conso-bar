@@ -29,6 +29,9 @@ export type Strings = {
   showMore: string
   showLess: string
   system: string
+  // the whole chip's temperature on a Mac, where CPU and GPU share it
+  chip: string
+  temperature: string
   cores: (n: number) => string
   // a figure the machine does not give
   na: string
@@ -101,6 +104,8 @@ const en: Strings = {
   showMore: 'Show more',
   showLess: 'Show less',
   system: 'System',
+  chip: 'Chip',
+  temperature: 'Temperature',
   cores: n => `${n} cores`,
   na: 'n/a',
   other: 'Other',
@@ -167,6 +172,8 @@ const fr: Strings = {
   showMore: 'Afficher plus',
   showLess: 'Réduire',
   system: 'Système',
+  chip: 'Puce',
+  temperature: 'Température',
   cores: n => `${n} cœurs`,
   na: 'indispo.',
   other: 'Autres',
@@ -233,6 +240,8 @@ const es: Strings = {
   showMore: 'Mostrar más',
   showLess: 'Mostrar menos',
   system: 'Sistema',
+  chip: 'Chip',
+  temperature: 'Temperatura',
   cores: n => `${n} núcleos`,
   na: 'n/d',
   other: 'Otros',
@@ -299,6 +308,8 @@ const de: Strings = {
   showMore: 'Mehr anzeigen',
   showLess: 'Weniger anzeigen',
   system: 'System',
+  chip: 'Chip',
+  temperature: 'Temperatur',
   cores: n => `${n} Kerne`,
   na: 'k. A.',
   other: 'Andere',
@@ -365,6 +376,8 @@ const it: Strings = {
   showMore: 'Mostra altri',
   showLess: 'Mostra meno',
   system: 'Sistema',
+  chip: 'Chip',
+  temperature: 'Temperatura',
   cores: n => `${n} core`,
   na: 'n/d',
   other: 'Altri',
@@ -431,6 +444,8 @@ const pt: Strings = {
   showMore: 'Mostrar mais',
   showLess: 'Mostrar menos',
   system: 'Sistema',
+  chip: 'Chip',
+  temperature: 'Temperatura',
   cores: n => `${n} núcleos`,
   na: 'n/d',
   other: 'Outros',

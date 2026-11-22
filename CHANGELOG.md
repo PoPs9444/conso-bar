@@ -2,6 +2,14 @@
 
 Every notable change to Conso. Versions follow [semantic versioning](https://semver.org).
 
+## [0.32.0] - 2026-11-22
+
+### Added
+- **Temperature on the System card.** At the far end of its title line, a small thermometer and the degrees, from green to red as it heats up. On a Mac, the whole chip (CPU and GPU share it), from its hottest sensor, with no admin rights. On Linux, the processor and the graphics card. On Windows, an NVIDIA card. Memory has no sensor any of these systems lets an app read.
+
+### Improved
+- **The hosts Conso reaches are declared** in its manifest: `api.anthropic.com` for your plan's usage and `raw.githubusercontent.com` for updates.
+
 ## [0.31.0] - 2026-11-11
 
 ### Added

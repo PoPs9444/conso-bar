@@ -9,13 +9,13 @@ import { HEX, contextCard, footerLine, heat, historyCard, left, limitCards, syst
 import { STRINGS, toLang } from './i18n'
 import type { Strings } from './i18n'
 import { costOf } from './pricing'
-import { LINUX, MAC, WINDOWS, keepColors, parseLinux, parseMac, parseWindows, topApps } from './system'
+import { LINUX, MAC, MAC_SENSORS, WINDOWS, keepColors, parseLinux, parseMac, parseMacSensors, parseWindows, topApps } from './system'
 import type { GpuClient, Platform, Proc, Reading } from './system'
 
 const PANE = 'conso'
 
 // Version of this code: keep equal to `version` in .claude-plugin/plugin.json
-export const VERSION = '0.31.0'
+export const VERSION = '0.32.0'
 const REPO = 'PoPs9444/conso-bar'
 const MARKETPLACE = 'conso-bar'
 // A manual check shows its progress at least this long: a result that lands at
@@ -355,13 +355,21 @@ const platformOf = async ($: EngineInterface): Promise<Platform> =>
 // One reading of the machine's load; undefined when the machine would not say
 const readSystem = async ($: EngineInterface): Promise<Reading | undefined> => {
   await platformOf($)
-  const r =
+  // On a Mac the chip's sensors are read at the same time, in a tenth of a
+  // second: the load's own reading takes one
+  const [r, sensors] = await Promise.all([
     platform === 'windows'
-      ? await $.process.run(['powershell', '-NoProfile', '-Command', WINDOWS], { timeoutMs: 8000 })
-      : await $.process.run(['sh', '-c', platform === 'linux' ? LINUX : MAC], { timeoutMs: 8000 })
+      ? $.process.run(['powershell', '-NoProfile', '-Command', WINDOWS], { timeoutMs: 8000 })
+      : $.process.run(['sh', '-c', platform === 'linux' ? LINUX : MAC], { timeoutMs: 8000 }),
+    platform === 'mac'
+      ? $.process.run(['osascript', '-l', 'JavaScript', '-e', MAC_SENSORS], { timeoutMs: 4000 }).catch(() => undefined)
+      : undefined,
+  ])
   if (r.exitCode !== 0 && !r.stdout.trim()) return undefined
   const reading = platform === 'windows' ? parseWindows(r.stdout) : platform === 'linux' ? parseLinux(r.stdout) : parseMac(r.stdout)
-  return reading.stats.cpu === undefined && reading.stats.ramUsed === undefined ? undefined : reading
+  if (reading.stats.cpu === undefined && reading.stats.ramUsed === undefined) return undefined
+  const chipTemp = sensors?.exitCode === 0 ? parseMacSensors(sensors.stdout) : undefined
+  return chipTemp === undefined ? reading : { ...reading, stats: { ...reading.stats, chipTemp } }
 }
 
 // The GPU over the time since the last reading, in percent: each client's GPU
@@ -420,6 +428,9 @@ const showSystem = async ($: EngineInterface) => {
     gpu: whole(s.gpu),
     ramUsed: tenth(s.ramUsed),
     ramTotal: tenth(s.ramTotal),
+    chipTemp: whole(s.chipTemp),
+    cpuTemp: whole(s.cpuTemp),
+    gpuTemp: whole(s.gpuTemp),
     apps: apps.length ? apps : undefined,
   }
   if (!same(before, shown)) await update($, system, () => shown)
@@ -830,7 +841,11 @@ export const register: Register = on => {
           : null,
         system: sys
           ? frame('sys', [
-              <els.Svg key="title" source={sys.title} alt={t.system} width={sys.titleW} height={14} />,
+              // The title, and the temperatures at the other end of its line
+              <els.Box key="title" flexDirection="row" justifyContent="space-between" alignItems="center" columnGap={1}>
+                <els.Svg source={sys.title} alt={t.system} width={sys.titleW} height={14} />
+                {sys.temp ? <els.Svg source={sys.temp.svg} alt={sys.temp.alt} width={sys.temp.w} height={14} /> : null}
+              </els.Box>,
               <els.Svg key="rings" source={sys.rings.svg} alt={sys.rings.alt} height={sys.rings.h} />,
               // The apps' table: the names, then a column per resource, its header a
               // button that ranks the apps by it (▾ on the one picked). Every column

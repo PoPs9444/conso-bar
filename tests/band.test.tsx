@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import { VERSION, parseUsage } from '../hooks/register'
-import { heat, tokens } from '../hooks/dashboard'
-import { appOf, gpuShort, keepColors, parseGpuClients, parseLinux, parseMac, parseWindows, pickGpu, topApps } from '../hooks/system'
+import { heat, tempColor, tokens } from '../hooks/dashboard'
+import { appOf, gpuShort, keepColors, parseGpuClients, parseLinux, parseMac, parseMacSensors, parseWindows, pickGpu, topApps } from '../hooks/system'
 
 const USAGE = {
   startedAt: 0,
@@ -69,11 +69,13 @@ test('the bar stays in the terminal', async ($, on) => {
     const ui = await $.ui.mount({
       plugin: 'conso-bar',
       component: 'AbovePrompt',
-      props: { hasSurvey: false, isWorking: false, maxRows: 20, scroll: { offset: 0, bodyRows: 20 } },
+      props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 20, bodyColumns: 80, scroll: { offset: 0, bodyRows: 20 }, view: {} },
       surface,
     } as never)
-    const engine = await ui.find({ type: 'Text', text: /engine/ })
-    expect(engine === undefined).toBe(surface === 'terminal')
+    // The bar's own figures: in the terminal only (the band now stacks the
+    // engine's own rows with the plugins' instead of letting one replace them)
+    const bar = await ui.find({ type: 'Text', text: /^Context$/ })
+    expect(bar !== undefined).toBe(surface === 'terminal')
     await ui.unmount()
   }
 })
@@ -925,7 +927,7 @@ MemAvailable:    4096000 kB
 @@
 8
 @@
-37, NVIDIA GeForce RTX 4070
+37, 66, NVIDIA GeForce RTX 4070
 @@
   4242  12.5  1048576 firefox
 `)
@@ -982,13 +984,78 @@ test('a graphics card goes by the name people use, the dedicated one first', () 
   expect(pickGpu([''])).toBeUndefined()
 })
 
-const mockMac = (on: any, gpu: () => number) => {
+const mockMac = (on: any, gpu: () => number, sensors?: () => string) => {
   on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'HOME' ? '/Users/someone' : undefined }))
   on('fs.exists', () => ({ value: false }))
-  on('process.run', (_: unknown, e: { argv: string[] }) =>
-    ({ value: e.argv[0] === 'sh' ? { exitCode: 0, stdout: macOut(gpu()), stderr: '' } : { exitCode: 1, stdout: '', stderr: '' } }),
-  )
+  on('process.run', (_: unknown, e: { argv: string[] }) => ({
+    value:
+      e.argv[0] === 'sh'
+        ? { exitCode: 0, stdout: macOut(gpu()), stderr: '' }
+        : e.argv[0] === 'osascript' && sensors
+          ? { exitCode: 0, stdout: sensors(), stderr: '' }
+          : { exitCode: 1, stdout: '', stderr: '' },
+  }))
 }
+
+test('the chip\'s temperature on the System card\'s title line, in the color of its heat', async ($, on) => {
+  let chip = 63.4
+  mockMac(on, () => 1e9, () => `NAND CH0 temp=32\nPMU tdie1=${chip - 1.2}\nPMU tdie4=${chip}\nPMU tcal=51.9\ngas gauge battery=30`)
+  await setup($, on)
+  await clock.advance(500)
+  let ui = await $.ui.mount(PANE)
+  let temp = (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('Temperature:'))
+  expect(temp?.props.alt).toBe('Temperature: Chip 63 °C')
+  const source = decodeURIComponent(String(temp?.props.source))
+  expect(source.includes(`fill="${tempColor(63)}"`)).toBe(true)
+  expect(source.includes('63\u202f°C')).toBe(true)
+  // On the title's line, at its far end
+  const line = (await ui.findAll({ type: 'Box' })).find(b => b.props.justifyContent === 'space-between' && String(b.key ?? '').includes('title'))
+  expect(line).toBeDefined()
+  await ui.unmount()
+  // Hot: red
+  chip = 101
+  await clock.advance(5000)
+  ui = await $.ui.mount(PANE)
+  temp = (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('Temperature:'))
+  expect(temp?.props.alt).toBe('Temperature: Chip 101 °C')
+  expect(decodeURIComponent(String(temp?.props.source)).includes(`fill="${heat(100)}"`)).toBe(true)
+  await ui.unmount()
+})
+
+test('no temperature line when the machine gives none', async ($, on) => {
+  mockMac(on, () => 1e9)
+  await setup($, on)
+  await clock.advance(500)
+  const ui = await $.ui.mount(PANE)
+  const alts = (await ui.findAll({ type: 'Svg' })).map(x => String(x.props.alt))
+  expect(alts.some(a => a.startsWith('System:'))).toBe(true)
+  expect(alts.some(a => a.startsWith('Temperature'))).toBe(false)
+  await ui.unmount()
+})
+
+test('a Mac\'s chip: its hottest die sensor, nothing from a sensor that cannot be right', () => {
+  expect(parseMacSensors('PMU tdie1=58.2\nPMU tdie2=61.75\nPMU2 tdie3=60\nNAND CH0 temp=33\nPMU tcal=70')).toBe(61.75)
+  expect(parseMacSensors('PMU tdie1=0\nPMU tdie2=180')).toBe(undefined)
+  expect(parseMacSensors('')).toBe(undefined)
+})
+
+test('Linux and Windows temperatures: the processor\'s and the graphics card\'s own sensors', () => {
+  const base = 'cpu 1 0 1 8 0 0 0 0\ncpu 2 0 2 9 0 0 0 0\n@@\nMemTotal: 1000 kB\nMemAvailable: 500 kB\n@@\n4\n@@\n'
+  // NVIDIA's own figure first; the processor's from its sensor chip
+  let s = parseLinux(`${base}37, 66, NVIDIA GeForce RTX 4070\n@@\n  1 0.0 100 init\n@@\nacpitz 27800\ncoretemp 54000\nnvme 38850\namdgpu 49000\n`).stats
+  expect([s.cpuTemp, s.gpuTemp, s.gpuName]).toEqual([54, 66, 'RTX 4070'])
+  // An AMD card: its sensor chip; an AMD processor: k10temp
+  s = parseLinux(`${base}\n@@\n  1 0.0 100 init\n@@\nk10temp 61250\namdgpu 47000\n`).stats
+  expect([s.cpuTemp, s.gpuTemp]).toEqual([61.25, 47])
+  // No sensors at all
+  s = parseLinux(`${base}\n@@\n  1 0.0 100 init\n@@\n`).stats
+  expect([s.cpuTemp, s.gpuTemp]).toEqual([undefined, undefined])
+  // Windows: the GPU through nvidia-smi, the processor never
+  const win = '12|16777216|8388608|12|33.5|1|11,chrome,0.5,2147483648||NVIDIA GeForce RTX 3080'
+  expect(parseWindows(`${win}|71\r\n`).stats.gpuTemp).toBe(71)
+  expect(parseWindows(`${win}|\r\n`).stats.gpuTemp).toBe(undefined)
+  expect(parseWindows(`${win}\r\n`).stats.cpuTemp).toBe(undefined)
+})
 
 test('the System card comes first, with each app\'s share of the machine', async ($, on) => {
   let gpu = 1e9

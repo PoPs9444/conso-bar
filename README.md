@@ -32,7 +32,7 @@ Claude Code's limits usually show up when you hit them. Conso keeps them in sigh
 <table>
   <tr>
     <td align="center" valign="top" width="50%">
-      <img src="docs/shot-system.svg" alt="The System card on an M4 Max: CPU, GPU and memory rings cut by app, and the apps ranked by GPU" width="372"><br>
+      <img src="docs/shot-system.svg" alt="The System card on an M4 Max: the chip's temperature, CPU, GPU and memory rings cut by app, and the apps ranked by GPU" width="372"><br>
       <sub><b>Your machine, app by app.</b> Click CPU, GPU or RAM to rank the apps by it.</sub>
     </td>
     <td align="center" valign="top" width="50%">
@@ -94,7 +94,7 @@ Restart Claude Code. The **Conso** panel opens on the right at the start of ever
 
 | Card | What it shows |
 | --- | --- |
-| **System** | Three rings for CPU, GPU and memory in use, each cut into a colored quarter per app, and a table of the four apps using the most with their share of each, colored from green to red as it nears the whole machine. Click its **CPU**, **GPU** or **RAM** header to rank them by that column. |
+| **System** | Three rings for CPU, GPU and memory in use, each cut into a colored quarter per app, and a table of the four apps using the most with their share of each, colored from green to red as it nears the whole machine. Click its **CPU**, **GPU** or **RAM** header to rank them by that column. The temperature sits on the title's line, from green to red as it heats up: the whole chip on a Mac, where CPU and GPU share it; the processor and the graphics card on Linux; an NVIDIA card on Windows. |
 | **Limits** | Your 5-hour and weekly usage in one card: a green-to-red ring for each, the time until it resets, a forecast, and the session cost. |
 | **Context** | Percentage and tokens used out of the window, a green-to-red gradient bar, and the **Compact** button. |
 | **History** | Today's cost, the last 7 days' total, and a small bar per day, from green for a light day to red for the heaviest. |
@@ -161,7 +161,7 @@ Everything Conso computes and stores stays on your machine. It makes two network
 - the version number published in this repository, to offer updates;
 - your plan's usage, from Anthropic (`api.anthropic.com/api/oauth/usage`, the request behind `/usage`), every 5 minutes at most while the panel or the bar is on screen. Claude Code signs it itself: Conso never sees your credentials. With an API key or a gateway, it is never sent.
 
-For the **System** card, it runs one short command every 5 seconds in the desktop app, using only what the system ships with: `iostat`, `ioreg`, `vm_stat`, `sysctl` and `ps` on macOS, `/proc` and `ps` (and `nvidia-smi` when present) on Linux, PowerShell every 10 seconds on Windows. The names of the apps it lists never leave the panel.
+For the **System** card, it runs one short command every 5 seconds in the desktop app, using only what the system ships with: `iostat`, `ioreg`, `vm_stat`, `sysctl` and `ps` on macOS, with the chip's temperature sensors read through `osascript`, no admin rights needed; `/proc`, the `/sys/class/hwmon` sensors and `ps` (and `nvidia-smi` when present) on Linux; PowerShell (and `nvidia-smi` when present) every 10 seconds on Windows. The names of the apps it lists never leave the panel.
 
 To pick its language, it reads Claude Code's `language` setting and, in the desktop app, the single `locale` key of the Claude app's settings file, extracted with the system's own `plutil` (macOS) or PowerShell (Windows), so nothing else in that file ever reaches Conso.
 

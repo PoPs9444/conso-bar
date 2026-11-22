@@ -64,6 +64,11 @@ export type SystemStats = {
   ramUsed?: number
   ramTotal?: number
   cores?: number
+  // temperatures in °C, where the system gives them: the whole chip on a Mac
+  // (CPU and GPU share it), the processor and the graphics card elsewhere
+  chipTemp?: number
+  cpuTemp?: number
+  gpuTemp?: number
   // the biggest consumers, each keeping its color while it stays among them
   apps?: AppLoad[]
 }

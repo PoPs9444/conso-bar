@@ -132,15 +132,70 @@ export const parseMac = (out: string): Reading => {
   }
 }
 
+// A temperature worth showing, in °C: a sensor that reads 0 or 150 is not one
+const celsius = (n: number | undefined) => (n !== undefined && n > 0 && n < 150 ? n : undefined)
+
+// macOS: the chip's temperature sensors, read through the system's own
+// scripting (no admin rights, nothing installed), as name=°C lines. CPU and
+// GPU share the chip, and nothing says which sensor sits under which, so the
+// panel shows the chip's hottest die
+export const MAC_SENSORS = [
+  "ObjC.import('Foundation')",
+  "ObjC.import('IOKit')",
+  "ObjC.bindFunction('IOHIDEventSystemClientCreate', ['id', ['id']])",
+  "ObjC.bindFunction('IOHIDEventSystemClientSetMatching', ['int', ['id', 'id']])",
+  "ObjC.bindFunction('IOHIDEventSystemClientCopyServices', ['id', ['id']])",
+  "ObjC.bindFunction('IOHIDServiceClientCopyProperty', ['id', ['id', 'id']])",
+  "ObjC.bindFunction('IOHIDServiceClientCopyEvent', ['id', ['id', 'long long', 'int', 'long long']])",
+  "ObjC.bindFunction('IOHIDEventGetFloatValue', ['double', ['id', 'int']])",
+  'const client = $.IOHIDEventSystemClientCreate($())',
+  '$.IOHIDEventSystemClientSetMatching(client, $({ PrimaryUsagePage: 0xff00, PrimaryUsage: 5 }))',
+  'const services = $.IOHIDEventSystemClientCopyServices(client)',
+  'const lines = []',
+  'for (let i = 0; services && i < services.count; i++) {',
+  '  const service = services.objectAtIndex(i)',
+  "  const event = $.IOHIDServiceClientCopyEvent(service, 15, 0, 0)",
+  '  if (!event || event.isNil()) continue',
+  "  lines.push(ObjC.unwrap($.IOHIDServiceClientCopyProperty(service, $('Product'))) + '=' + $.IOHIDEventGetFloatValue(event, 15 << 16))",
+  '}',
+  "lines.join('\\n')",
+].join('\n')
+
+export const parseMacSensors = (out: string): number | undefined => {
+  const dies = out
+    .split('\n')
+    .map(line => /^(.*tdie.*)=([\d.]+)$/i.exec(line.trim()))
+    .map(m => celsius(num(m?.[2])))
+    .filter((c): c is number => c !== undefined)
+  return dies.length ? Math.max(...dies) : undefined
+}
+
+// Linux: the processor's and the graphics card's sensor chips, by the name
+// their driver gives them
+const CPU_SENSORS = ['coretemp', 'k10temp', 'zenpower', 'cpu_thermal', 'soc_thermal']
+const GPU_SENSORS = ['amdgpu', 'nouveau']
+const linuxSensors = (out: string) => {
+  const found = new Map<string, number>()
+  for (const line of out.split('\n')) {
+    const [name = '', milli] = line.trim().split(/\s+/)
+    const c = celsius((num(milli) ?? 0) / 1000)
+    if (c !== undefined && !found.has(name)) found.set(name, c)
+  }
+  const first = (names: string[]) => names.map(n => found.get(n)).find(c => c !== undefined)
+  return { cpu: first(CPU_SENSORS), gpu: first(GPU_SENSORS) }
+}
+
 // Linux: two /proc/stat samples one second apart, MemAvailable, an NVIDIA GPU
 // when nvidia-smi is there, and the processes
 export const LINUX =
   'export LC_ALL=C; head -1 /proc/stat; sleep 1; head -1 /proc/stat; echo @@; ' +
   "grep -E '^(MemTotal|MemAvailable):' /proc/meminfo; echo @@; nproc; echo @@; " +
-  `nvidia-smi --query-gpu=utilization.gpu,name --format=csv,noheader,nounits 2>/dev/null | head -1; echo @@; ${PS}`
+  `nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,name --format=csv,noheader,nounits 2>/dev/null | head -1; echo @@; ${PS}; echo @@; ` +
+  // Each sensor chip's name and first temperature, in thousandths of a degree
+  'for d in /sys/class/hwmon/hwmon*; do echo "$(cat $d/name 2>/dev/null) $(cat $d/temp1_input 2>/dev/null)"; done'
 
 export const parseLinux = (out: string): Reading => {
-  const [cpuPart = '', memPart = '', coresPart = '', gpuPart = '', psPart = ''] = out.split('@@')
+  const [cpuPart = '', memPart = '', coresPart = '', gpuPart = '', psPart = '', sensorPart = ''] = out.split('@@')
   const samples = cpuPart
     .trim()
     .split('\n')
@@ -155,12 +210,15 @@ export const parseLinux = (out: string): Reading => {
   const kb = (name: string) => num(new RegExp(`${name}:\\s+(\\d+)`).exec(memPart)?.[1])
   const total = kb('MemTotal')
   const available = kb('MemAvailable')
-  const [gpu, ...name] = gpuPart.trim().split(',')
+  const [gpu, gpuTemp, ...name] = gpuPart.trim().split(',')
+  const sensors = linuxSensors(sensorPart)
   return {
     stats: {
       cpu,
       gpu: gpuPart.trim() ? pct(num(gpu?.trim())) : undefined,
       gpuName: gpuShort(name.join(',')) || undefined,
+      cpuTemp: sensors.cpu,
+      gpuTemp: celsius(num(gpuTemp?.trim())) ?? sensors.gpu,
       ramUsed: total !== undefined && available !== undefined ? ((total - available) * 1024) / GIB : undefined,
       ramTotal: total !== undefined ? (total * 1024) / GIB : undefined,
       cores: num(coresPart.trim()) || undefined,
@@ -188,10 +246,12 @@ export const WINDOWS =
   '$r=1000-$w.ElapsedMilliseconds; if($r -gt 0){ Start-Sleep -Milliseconds $r }; $d=$w.Elapsed.TotalSeconds; ' +
   "$p=(Get-Process | Where-Object { $_.Id -ne 0 -and $_.Id -ne $PID } | ForEach-Object { \"$($_.Id),$($_.ProcessName),$($_.CPU - $a[$_.Id]),$($_.WorkingSet64)\" }) -join ';'; " +
   "$v=(Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name }) -join ';'; " +
-  '"$c|$($o.TotalVisibleMemorySize)|$($o.FreePhysicalMemory)|$n|$g|$d|$p|$q|$v"'
+  // The GPU's temperature: NVIDIA's own tool, installed with its driver
+  "$t=if(Get-Command nvidia-smi -ErrorAction SilentlyContinue){ try{ nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>$null | Select-Object -First 1 }catch{''} }else{''}; " +
+  '"$c|$($o.TotalVisibleMemorySize)|$($o.FreePhysicalMemory)|$n|$g|$d|$p|$q|$v|$t"'
 
 export const parseWindows = (out: string): Reading => {
-  const [cpu, total, free, cores, gpu, span, apps = '', gpuApps = '', cards = ''] = out.trim().split('|')
+  const [cpu, total, free, cores, gpu, span, apps = '', gpuApps = '', cards = '', gpuTemp = ''] = out.trim().split('|')
   const t = num(total)
   const f = num(free)
   const dt = num(span)
@@ -217,6 +277,7 @@ export const parseWindows = (out: string): Reading => {
       cpu: pct(num(cpu)),
       gpu: hasGpu ? pct(num(gpu!.trim())) : undefined,
       gpuName: pickGpu(cards.split(';')),
+      gpuTemp: celsius(num(gpuTemp.trim())),
       ramUsed: t !== undefined && f !== undefined ? ((t - f) * 1024) / GIB : undefined,
       ramTotal: t !== undefined ? (t * 1024) / GIB : undefined,
       cores: num(cores) || undefined,
